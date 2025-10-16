@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ExpoLinking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import React, {
   createContext,
@@ -8,7 +9,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, Linking as RNLinking } from "react-native";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";
 import { supabase } from "../utils/supabase";
 
@@ -26,6 +27,58 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleDeepLink = useCallback(
+    async (url: string) => {
+      const parsed = ExpoLinking.parse(url);
+
+      const isAuthRedirect =
+        url.startsWith(ExpoLinking.createURL("auth")) ||
+        parsed.hostname === "auth" ||
+        parsed.path?.startsWith("auth");
+
+      if (!isAuthRedirect) {
+        return;
+      }
+
+      const accessToken = parsed.queryParams?.access_token;
+      const refreshToken = parsed.queryParams?.refresh_token;
+      const errorDescription = parsed.queryParams?.error_description;
+
+      if (typeof errorDescription === "string" && errorDescription.length) {
+        Alert.alert("Login", errorDescription);
+        return;
+      }
+
+      if (
+        typeof accessToken !== "string" ||
+        typeof refreshToken !== "string"
+      ) {
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          Alert.alert("Login", error.message);
+        }
+      } catch (error) {
+        console.warn("Failed to handle magic link", error);
+        Alert.alert(
+          "Login",
+          "There was a problem completing the magic link sign-in.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const initialise = async () => {
@@ -52,6 +105,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initialise();
 
+    const subscription = RNLinking.addEventListener("url", ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    RNLinking.getInitialURL()
+      .then((initialUrl) => {
+        if (initialUrl) {
+          handleDeepLink(initialUrl);
+        }
+      })
+      .catch((error) => {
+        console.warn("Unable to get initial URL", error);
+      });
+
     const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession) {
@@ -67,8 +134,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       data.subscription.unsubscribe();
+      subscription.remove();
     };
-  }, []);
+  }, [handleDeepLink]);
 
   useEffect(() => {
     if (!session?.user) {
@@ -130,7 +198,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [session?.user?.id]);
 
   const requestOtp = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    const redirectTo = ExpoLinking.createURL("auth");
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
     if (error) {
       throw error;
     }

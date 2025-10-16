@@ -2,6 +2,7 @@
   "expo": {
     "name": "blockcart-app",
     "slug": "blockcart-app",
+    "scheme": "blockcart",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
