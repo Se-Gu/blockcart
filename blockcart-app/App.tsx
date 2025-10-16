@@ -23,6 +23,8 @@ import type { RootStackParamList, TabParamList } from "./src/screens/types";
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
   }),
@@ -30,6 +32,16 @@ Notifications.setNotificationHandler({
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+
+const TAB_ICON_MAP: Record<
+  keyof TabParamList,
+  keyof typeof MaterialCommunityIcons.glyphMap
+> = {
+  Home: "home-outline",
+  Receipts: "receipt-outline",
+  Wallet: "wallet-outline",
+  Profile: "account-circle-outline",
+};
 
 const TabNavigator = () => (
   <Tab.Navigator
@@ -39,13 +51,7 @@ const TabNavigator = () => (
       tabBarInactiveTintColor: "#94a3b8",
       tabBarStyle: { backgroundColor: "#ffffff" },
       tabBarIcon: ({ color, size }) => {
-        const iconMap: Record<keyof TabParamList, string> = {
-          Home: "home-outline",
-          Receipts: "receipt-outline",
-          Wallet: "wallet-outline",
-          Profile: "account-circle-outline",
-        };
-        const iconName = iconMap[route.name as keyof TabParamList];
+        const iconName = TAB_ICON_MAP[route.name as keyof TabParamList];
         return (
           <MaterialCommunityIcons name={iconName} size={size} color={color} />
         );
