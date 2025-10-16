@@ -1,0 +1,192 @@
+import "react-native-gesture-handler";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AppState,
+  AppStateStatus,
+  Platform,
+  useColorScheme,
+} from "react-native";
+import {
+  NavigationContainer,
+  DarkTheme as NavigationDarkTheme,
+  DefaultTheme as NavigationDefaultTheme,
+} from "@react-navigation/native";
+import {
+  MD3DarkTheme,
+  MD3LightTheme,
+  Provider as PaperProvider,
+  adaptNavigationTheme,
+} from "react-native-paper";
+import * as Notifications from "expo-notifications";
+import type {
+  RealtimePostgresChangesPayload,
+  Session,
+} from "@supabase/supabase-js";
+import MainNavigator from "./navigation/MainNavigator";
+import LoginScreen from "./screens/LoginScreen";
+import { supabase } from "./lib/supabase";
+import { AuthContext } from "./context/AuthContext";
+import LoadingView from "./components/LoadingView";
+import type { Receipt } from "./types";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
+const { LightTheme: navLightTheme, DarkTheme: navDarkTheme } =
+  adaptNavigationTheme({
+    reactNavigationLight: NavigationDefaultTheme,
+    reactNavigationDark: NavigationDarkTheme,
+  });
+
+export default function App() {
+  const colorScheme = useColorScheme();
+  const [session, setSession] = useState<Session | null>(null);
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    const setupSession = async () => {
+      const {
+        data: { session: activeSession },
+      } = await supabase.auth.getSession();
+      setSession(activeSession);
+      setInitializing(false);
+    };
+
+    void setupSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleAppStateChange = (state: AppStateStatus) => {
+      if (state === "active") {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const configureNotifications = async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== "granted") {
+        await Notifications.requestPermissionsAsync();
+      }
+
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "default",
+          importance: Notifications.AndroidImportance.DEFAULT,
+        });
+      }
+    };
+
+    void configureNotifications();
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`receipts-updates-${session.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "receipts",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        async (payload: RealtimePostgresChangesPayload<Receipt>) => {
+          const newRow = (payload.new ?? {}) as Partial<Receipt>;
+          const oldRow = (payload.old ?? {}) as Partial<Receipt>;
+          const newStatus = newRow.status;
+          const oldStatus = oldRow.status;
+
+          if (newStatus === "approved" && oldStatus !== "approved") {
+            const rewardAmount = newRow.reward_amount;
+            const rewardText =
+              rewardAmount && rewardAmount > 0
+                ? ` ${rewardAmount.toFixed(2)} BCT$!`
+                : "!";
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: "🎉 Your receipt earned BCT$!",
+                body: `Your receipt was approved${rewardText}`,
+              },
+              trigger: null,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  const paperTheme = colorScheme === "dark" ? MD3DarkTheme : MD3LightTheme;
+  const navigationTheme =
+    colorScheme === "dark" ? navDarkTheme : navLightTheme;
+
+  const refreshSession = useCallback(async () => {
+    const {
+      data: { session: refreshed },
+    } = await supabase.auth.getSession();
+    setSession(refreshed);
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+  }, []);
+
+  const authContextValue = useMemo(
+    () => ({
+      session,
+      refreshSession,
+      signOut,
+    }),
+    [refreshSession, session, signOut]
+  );
+
+  if (initializing) {
+    return (
+      <PaperProvider theme={paperTheme}>
+        <LoadingView message="Preparing Blockcart" />
+      </PaperProvider>
+    );
+  }
+
+  return (
+    <PaperProvider theme={paperTheme}>
+      <AuthContext.Provider value={authContextValue}>
+        <NavigationContainer theme={navigationTheme}>
+          {session ? <MainNavigator /> : <LoginScreen />}
+        </NavigationContainer>
+      </AuthContext.Provider>
+    </PaperProvider>
+  );
+}
