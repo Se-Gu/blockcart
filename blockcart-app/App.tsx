@@ -5,8 +5,10 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import React from "react";
 import { View } from "react-native";
-import { ActivityIndicator, Provider as PaperProvider } from "react-native-paper";
-import { NativeWindStyleSheet } from "nativewind";
+import {
+  ActivityIndicator,
+  Provider as PaperProvider,
+} from "react-native-paper";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -17,10 +19,6 @@ import { UploadReceiptScreen } from "./src/screens/UploadReceiptScreen";
 import { ReceiptDetailScreen } from "./src/screens/ReceiptDetailScreen";
 import { ReferralScreen } from "./src/screens/ReferralScreen";
 import type { RootStackParamList, TabParamList } from "./src/screens/types";
-
-NativeWindStyleSheet.setOutput({
-  default: "native",
-});
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -48,7 +46,9 @@ const TabNavigator = () => (
           Profile: "account-circle-outline",
         };
         const iconName = iconMap[route.name as keyof TabParamList];
-        return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
+        return (
+          <MaterialCommunityIcons name={iconName} size={size} color={color} />
+        );
       },
     })}
   >
@@ -96,7 +96,11 @@ const RootNavigator = () => {
           />
         </>
       ) : (
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ headerShown: false }}
+        />
       )}
     </Stack.Navigator>
   );
