@@ -222,9 +222,9 @@ export default function WalletScreen(_props: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
     gap: spacing.md,
-    paddingTop: spacing.sm,
   },
   balanceCard: {
     borderRadius: borderRadius.lg,

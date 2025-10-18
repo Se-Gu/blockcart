@@ -379,7 +379,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     padding: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.lg,
   },
   uploadCard: {
     borderRadius: borderRadius.xl,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   },
   dropZoneTitle: {
     fontWeight: "700",
-    color: colors.textPrimary,
+    color: colors.primaryDark,
     textAlign: "center",
   },
   dropZoneSubtitle: {

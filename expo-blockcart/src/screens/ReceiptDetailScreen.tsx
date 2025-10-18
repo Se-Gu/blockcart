@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, ScrollView, View } from "react-native";
+import { Image, ScrollView, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Card, Divider, Surface, Text, useTheme } from "react-native-paper";
 import { supabase } from "../lib/supabase";
@@ -8,6 +8,7 @@ import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
 import type { Receipt } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import LoadingView from "../components/LoadingView";
+import { spacing } from "../theme/colors";
 
 const DETAIL_FIELDS: Array<{ label: string; key: keyof Receipt }> = [
   { label: "Store", key: "store" },
@@ -110,12 +111,10 @@ export default function ReceiptDetailScreen({ route }: Props) {
     : [];
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Card>
-        <Card.Content style={{ gap: 12 }}>
-          <View
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
-          >
+        <Card.Content style={styles.cardContent}>
+          <View style={styles.headerRow}>
             <Text variant="titleLarge">{receipt.store ?? "Pending OCR"}</Text>
             <ReceiptStatusChip status={receipt.status} />
           </View>
@@ -155,7 +154,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
 
       <Card>
         <Card.Title title="Parsed Data" subtitle="OCR extracted fields" />
-        <Card.Content>
+        <Card.Content style={styles.cardContent}>
           {parsedFields.length === 0 ? (
             <Text
               variant="bodyMedium"
@@ -165,7 +164,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
             </Text>
           ) : (
             parsedFields.map(([key, value]) => (
-              <View key={key} style={{ marginBottom: 12 }}>
+              <View key={key} style={styles.parsedItem}>
                 <Text variant="labelLarge">{key}</Text>
                 <Text>{JSON.stringify(value)}</Text>
                 <Divider style={{ marginTop: 8 }} />
@@ -177,3 +176,23 @@ export default function ReceiptDetailScreen({ route }: Props) {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  cardContent: {
+    gap: spacing.sm,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  parsedItem: {
+    marginBottom: spacing.sm,
+  },
+});

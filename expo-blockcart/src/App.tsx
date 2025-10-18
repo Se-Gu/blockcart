@@ -24,6 +24,7 @@ import type {
   RealtimePostgresChangesPayload,
   Session,
 } from "@supabase/supabase-js";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import MainNavigator from "./navigation/MainNavigator";
 import LoginScreen from "./screens/LoginScreen";
 import { supabase } from "./lib/supabase";
@@ -231,13 +232,15 @@ export default function App() {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <ToastProvider>
-        <AuthContext.Provider value={authContextValue}>
-          <NavigationContainer theme={navigationTheme}>
-            {session ? <MainNavigator /> : <LoginScreen />}
-          </NavigationContainer>
-        </AuthContext.Provider>
-      </ToastProvider>
+      <SafeAreaProvider>
+        <ToastProvider>
+          <AuthContext.Provider value={authContextValue}>
+            <NavigationContainer theme={navigationTheme}>
+              {session ? <MainNavigator /> : <LoginScreen />}
+            </NavigationContainer>
+          </AuthContext.Provider>
+        </ToastProvider>
+      </SafeAreaProvider>
     </PaperProvider>
   );
 }

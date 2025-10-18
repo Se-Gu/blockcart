@@ -1,5 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { NavigatorScreenParams, ParamListBase } from "@react-navigation/native";
+import {
+  NavigatorScreenParams,
+  ParamListBase,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "react-native-paper";
@@ -50,8 +53,31 @@ const tabScreenOptions: Record<keyof AppTabParamList, ScreenOptions> = {
 
 function ReceiptsStackNavigator() {
   return (
-    <ReceiptsStack.Navigator screenOptions={{ headerShown: false }}>
-      <ReceiptsStack.Screen name="ReceiptList" component={ReceiptListScreen} />
+    <ReceiptsStack.Navigator
+      screenOptions={({ navigation }) => ({
+        header: ({ navigation: headerNavigation, options, route, back }) => (
+          <AppHeader
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : options.title ?? route.name
+            }
+            canGoBack={!!back}
+            onBackPress={() => headerNavigation.goBack()}
+            onNavigateToProfile={() =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+          />
+        ),
+      })}
+    >
+      <ReceiptsStack.Screen
+        name="ReceiptList"
+        component={ReceiptListScreen}
+        options={{ title: "Receipts" }}
+      />
       <ReceiptsStack.Screen
         name="ReceiptDetail"
         component={ReceiptDetailScreen}
@@ -68,8 +94,31 @@ function ReceiptsStackNavigator() {
 
 function ProfileStackNavigator() {
   return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+    <ProfileStack.Navigator
+      screenOptions={({ navigation }) => ({
+        header: ({ navigation: headerNavigation, options, route, back }) => (
+          <AppHeader
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : options.title ?? route.name
+            }
+            canGoBack={!!back}
+            onBackPress={() => headerNavigation.goBack()}
+            onNavigateToProfile={() =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+          />
+        ),
+      })}
+    >
+      <ProfileStack.Screen
+        name="ProfileMain"
+        component={ProfileScreen}
+        options={{ title: "Profile" }}
+      />
       <ProfileStack.Screen
         name="Referral"
         component={ReferralScreen}
@@ -84,9 +133,18 @@ export default function MainNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        header: () => (
+        header: ({ navigation, options, back }) => (
           <AppHeader
-            title={tabScreenOptions[route.name as keyof AppTabParamList].title}
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : tabScreenOptions[route.name as keyof AppTabParamList].title
+            }
+            canGoBack={!!back}
+            onBackPress={() => navigation.goBack()}
+            onNavigateToProfile={() =>
+              navigation.navigate("Profile", { screen: "ProfileMain" })
+            }
           />
         ),
         tabBarActiveTintColor: theme.colors.primary,
@@ -108,7 +166,15 @@ export default function MainNavigator() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Receipts" component={ReceiptsStackNavigator} />
+      <Tab.Screen
+        name="Receipts"
+        component={ReceiptsStackNavigator}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate("Receipts", { screen: "ReceiptList" });
+          },
+        })}
+      />
       <Tab.Screen name="Wallet" component={WalletScreen} />
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>

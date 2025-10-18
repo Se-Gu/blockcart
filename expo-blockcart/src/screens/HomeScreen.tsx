@@ -355,30 +355,33 @@ export default function HomeScreen({ navigation }: Props) {
         </Card>
       </ScrollView>
 
-      <LinearGradient
-        colors={[colors.primary, colors.accent]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.fabGradient}
-      >
-        <FAB
-          icon="camera-plus"
-          style={styles.fab}
-          onPress={() =>
-            navigation.navigate("Receipts", { screen: "UploadReceipt" })
-          }
-          label="Upload"
-          color="#FFFFFF"
-          customSize={56}
-        />
-      </LinearGradient>
+      <View style={styles.fabWrapper}>
+        <LinearGradient
+          colors={[colors.primary, colors.accent]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <FAB
+            icon="camera-plus"
+            style={styles.fab}
+            onPress={() =>
+              navigation.navigate("Receipts", { screen: "UploadReceipt" })
+            }
+            label="Upload"
+            color="#FFFFFF"
+            customSize={56}
+          />
+        </LinearGradient>
+      </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
     gap: spacing.md,
     paddingBottom: 100,
   },
@@ -562,11 +565,14 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     alignSelf: "flex-start",
   },
-  fabGradient: {
+  fabWrapper: {
     position: "absolute",
     right: spacing.md,
-    bottom: 80,
+    bottom: spacing.lg * 2,
+  },
+  fabGradient: {
     borderRadius: 28,
+    overflow: "hidden",
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -576,5 +582,6 @@ const styles = StyleSheet.create({
   fab: {
     backgroundColor: "transparent",
     margin: 0,
+    borderRadius: 28,
   },
 });

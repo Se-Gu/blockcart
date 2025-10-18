@@ -218,7 +218,8 @@ export default function ReceiptListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
     gap: spacing.md,
     paddingBottom: 100,
   },

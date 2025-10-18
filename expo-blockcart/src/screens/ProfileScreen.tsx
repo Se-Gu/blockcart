@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Button,
@@ -15,6 +15,7 @@ import { useErrorHandler } from "../hooks/useErrorHandler";
 import { useToast } from "../components/ToastProvider";
 import type { ProfileStackParamList } from "../navigation/MainNavigator";
 import type { Profile } from "../types";
+import { borderRadius, spacing } from "../theme/colors";
 
 const SEX_OPTIONS = [
   { value: "male", label: "Male" },
@@ -117,9 +118,9 @@ export default function ProfileScreen({ navigation }: Props) {
   }, [age, loadProfile, session?.user?.id, sex, showSuccess, handleError]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingTop: 8 }}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Card>
-        <Card.Content style={{ gap: 12 }}>
+        <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">Account</Text>
           <TextInput
             label="Email"
@@ -137,7 +138,7 @@ export default function ProfileScreen({ navigation }: Props) {
       </Card>
 
       <Card>
-        <Card.Content style={{ gap: 12 }}>
+        <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">KYC Information</Text>
           <TextInput
             label="Age"
@@ -162,12 +163,10 @@ export default function ProfileScreen({ navigation }: Props) {
           />
           {showSexOptions && (
             <View
-              style={{
-                marginTop: 8,
-                backgroundColor: theme.colors.surface,
-                borderRadius: 8,
-                elevation: 2,
-              }}
+              style={[
+                styles.sexOptionsContainer,
+                { backgroundColor: theme.colors.surface },
+              ]}
             >
               {SEX_OPTIONS.map((option) => (
                 <List.Item
@@ -177,7 +176,7 @@ export default function ProfileScreen({ navigation }: Props) {
                     setSex(option.value);
                     setShowSexOptions(false);
                   }}
-                  style={{ paddingHorizontal: 16 }}
+                  style={styles.sexOption}
                 />
               ))}
             </View>
@@ -194,7 +193,7 @@ export default function ProfileScreen({ navigation }: Props) {
       </Card>
 
       <Card>
-        <Card.Content>
+        <Card.Content style={styles.signOutContent}>
           <Button
             mode="text"
             textColor={theme.colors.error}
@@ -213,3 +212,26 @@ export default function ProfileScreen({ navigation }: Props) {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  cardContent: {
+    gap: spacing.sm,
+  },
+  sexOptionsContainer: {
+    marginTop: spacing.xs,
+    borderRadius: borderRadius.md,
+    elevation: 2,
+  },
+  sexOption: {
+    paddingHorizontal: spacing.md,
+  },
+  signOutContent: {
+    alignItems: "flex-start",
+  },
+});
