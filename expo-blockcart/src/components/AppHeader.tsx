@@ -1,5 +1,7 @@
-import { View } from "react-native";
+"use client";
 import { Text, useTheme } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, spacing } from "../theme/colors";
 
 interface AppHeaderProps {
   title?: string;
@@ -9,29 +11,29 @@ export default function AppHeader({ title }: AppHeaderProps) {
   const theme = useTheme();
 
   return (
-    <View
+    <LinearGradient
+      colors={[colors.gradientStart, colors.gradientEnd]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
       style={{
-        backgroundColor: theme.colors.primary,
-        paddingTop: 16,
-        paddingBottom: 16,
-        paddingHorizontal: 16,
+        paddingTop: 48,
+        paddingBottom: spacing.md,
+        paddingHorizontal: spacing.md,
         alignItems: "center",
         justifyContent: "center",
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.primaryContainer,
       }}
     >
       <Text
         variant="headlineSmall"
         style={{
-          color: theme.colors.onPrimary,
-          fontWeight: "bold",
+          color: "#FFFFFF",
+          fontWeight: "600",
           textAlign: "center",
+          letterSpacing: 0.5,
         }}
       >
-        {title || "BlockCart"}
+        {title || "Blockcart"}
       </Text>
-    </View>
+    </LinearGradient>
   );
 }
-r;

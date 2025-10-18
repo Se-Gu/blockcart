@@ -1,5 +1,13 @@
+"use client";
+
 import { useCallback, useState } from "react";
-import { Alert, RefreshControl, ScrollView } from "react-native";
+import {
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -9,13 +17,16 @@ import {
   Surface,
   Text,
   useTheme,
+  IconButton,
 } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { AppTabParamList } from "../navigation/MainNavigator";
 import type { Reward, UserBalance } from "../types";
 import LoadingView from "../components/LoadingView";
 import { useErrorHandler } from "../hooks/useErrorHandler";
+import { colors, spacing, borderRadius } from "../theme/colors";
 
 const TRANSACTION_LIMIT = 10;
 
@@ -79,7 +90,7 @@ export default function WalletScreen(_props: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session?.user?.id, handleError]);
+  }, [session?.user, handleError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,52 +112,101 @@ export default function WalletScreen(_props: Props) {
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16, gap: 16, paddingTop: 8 }}
+      contentContainerStyle={styles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
-      <Card>
-        <Card.Content>
-          <Text variant="titleMedium">Total Balance</Text>
-          <Text variant="headlineLarge" style={{ marginTop: 8 }}>
-            BCT$ {totalBalance?.toFixed(2) ?? "0.00"}
-          </Text>
-          <Button
-            mode="outlined"
-            style={{ marginTop: 16 }}
-            onPress={() =>
-              Alert.alert("Coming soon", "Wallet connection is on the roadmap.")
-            }
-          >
-            Connect Wallet
-          </Button>
-        </Card.Content>
-      </Card>
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.balanceCard}
+      >
+        <Text variant="titleMedium" style={styles.balanceLabel}>
+          Total Balance
+        </Text>
+        <Text variant="displayMedium" style={styles.balanceAmount}>
+          {totalBalance?.toFixed(2) ?? "0.00"} BCT$
+        </Text>
+        <Button
+          mode="contained-tonal"
+          style={styles.connectButton}
+          buttonColor="rgba(255, 255, 255, 0.2)"
+          textColor="#FFFFFF"
+          onPress={() =>
+            Alert.alert("Coming soon", "Wallet connection is on the roadmap.")
+          }
+        >
+          Connect Wallet
+        </Button>
+      </LinearGradient>
 
-      <Card>
-        <Card.Title title="Recent Rewards" subtitle="Last 10 transactions" />
-        <Card.Content style={{ gap: 12 }}>
+      <Card style={styles.card}>
+        <Card.Title
+          title="Transaction History"
+          subtitle={`${transactions.length} recent rewards`}
+          titleStyle={{ fontWeight: "600" }}
+        />
+        <Card.Content style={{ gap: spacing.sm }}>
           {transactions.length === 0 ? (
-            <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              No rewards yet. Upload receipts to earn BCT$.
-            </Text>
+            <View style={styles.emptyState}>
+              <IconButton
+                icon="wallet-outline"
+                size={64}
+                iconColor={theme.colors.outline}
+              />
+              <Text
+                variant="bodyLarge"
+                style={{
+                  color: theme.colors.onSurfaceVariant,
+                  textAlign: "center",
+                }}
+              >
+                No rewards yet
+              </Text>
+              <Text
+                variant="bodyMedium"
+                style={{
+                  color: theme.colors.outline,
+                  textAlign: "center",
+                  marginTop: spacing.xs,
+                }}
+              >
+                Upload receipts to start earning BCT$
+              </Text>
+            </View>
           ) : (
             transactions.map((reward) => (
               <Surface
                 key={reward.id}
-                style={{ borderRadius: 12 }}
+                style={styles.transactionItem}
                 elevation={1}
               >
                 <List.Item
-                  title="Receipt reward"
+                  title="Receipt Reward"
+                  titleStyle={{ fontWeight: "600" }}
                   description={`${new Date(
                     reward.created_at
-                  ).toLocaleString()} • ${
+                  ).toLocaleDateString()} • ${
                     reward.receipt?.store ?? "Unknown store"
                   }`}
+                  left={() => (
+                    <View
+                      style={[
+                        styles.iconContainer,
+                        { backgroundColor: `${colors.approved}20` },
+                      ]}
+                    >
+                      <IconButton
+                        icon="plus-circle"
+                        size={24}
+                        iconColor={colors.approved}
+                      />
+                    </View>
+                  )}
                   right={() => (
-                    <Text style={{ fontWeight: "600" }}>
+                    <Text style={styles.rewardAmount}>
                       +{reward.amount.toFixed(2)} BCT$
                     </Text>
                   )}
@@ -159,3 +219,61 @@ export default function WalletScreen(_props: Props) {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: spacing.md,
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  balanceCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+    gap: spacing.sm,
+  },
+  balanceLabel: {
+    color: "#FFFFFF",
+    opacity: 0.9,
+    fontWeight: "500",
+  },
+  balanceAmount: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  connectButton: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  card: {
+    borderRadius: borderRadius.lg,
+    elevation: 2,
+  },
+  transactionItem: {
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: spacing.sm,
+  },
+  rewardAmount: {
+    fontWeight: "700",
+    fontSize: 16,
+    color: colors.approved,
+    alignSelf: "center",
+    marginRight: spacing.sm,
+  },
+  emptyState: {
+    paddingVertical: spacing.xl,
+    alignItems: "center",
+  },
+});

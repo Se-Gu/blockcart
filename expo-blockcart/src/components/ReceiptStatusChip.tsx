@@ -1,11 +1,14 @@
+"use client";
+
 import { memo } from "react";
 import { Chip, useTheme } from "react-native-paper";
 import type { ReceiptStatus } from "../types";
+import { colors } from "../theme/colors";
 
 const STATUS_COLORS: Record<ReceiptStatus, string> = {
-  pending: "#f59e0b",
-  approved: "#22c55e",
-  rejected: "#ef4444",
+  pending: colors.pending,
+  approved: colors.approved,
+  rejected: colors.error,
 };
 
 const STATUS_LABELS: Record<ReceiptStatus, string> = {
@@ -20,16 +23,21 @@ type Props = {
 
 function ReceiptStatusChipComponent({ status }: Props) {
   const theme = useTheme();
+  const statusColor = STATUS_COLORS[status];
+
   return (
     <Chip
       compact
       style={{
-        backgroundColor:
-          theme.dark && status === "pending"
-            ? theme.colors.surfaceVariant
-            : `${STATUS_COLORS[status]}33`,
+        backgroundColor: `${statusColor}20`,
+        borderWidth: 1,
+        borderColor: `${statusColor}40`,
       }}
-      textStyle={{ color: STATUS_COLORS[status], fontWeight: "600" }}
+      textStyle={{
+        color: theme.dark ? statusColor : statusColor,
+        fontWeight: "600",
+        fontSize: 12,
+      }}
     >
       {STATUS_LABELS[status]}
     </Chip>

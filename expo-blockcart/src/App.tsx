@@ -1,8 +1,10 @@
+"use client";
+
 import "react-native-gesture-handler";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AppState,
-  AppStateStatus,
+  type AppStateStatus,
   Platform,
   useColorScheme,
 } from "react-native";
@@ -29,6 +31,7 @@ import { AuthContext } from "./context/AuthContext";
 import LoadingView from "./components/LoadingView";
 import { ToastProvider } from "./components/ToastProvider";
 import type { Receipt } from "./types";
+import { colors } from "./theme/colors";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -43,6 +46,48 @@ const { LightTheme: navLightTheme, DarkTheme: navDarkTheme } =
     reactNavigationLight: NavigationDefaultTheme,
     reactNavigationDark: NavigationDarkTheme,
   });
+
+const customLightTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: colors.primary,
+    primaryContainer: colors.primaryDark,
+    secondary: colors.accent,
+    secondaryContainer: colors.accentDark,
+    background: colors.background,
+    surface: colors.surface,
+    surfaceVariant: colors.surfaceVariant,
+    error: colors.error,
+    onPrimary: "#FFFFFF",
+    onSecondary: "#FFFFFF",
+    onBackground: colors.textPrimary,
+    onSurface: colors.textPrimary,
+    onSurfaceVariant: colors.textSecondary,
+    outline: colors.textSecondary,
+  },
+};
+
+const customDarkTheme = {
+  ...MD3DarkTheme,
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: colors.primary,
+    primaryContainer: colors.primaryDark,
+    secondary: colors.accent,
+    secondaryContainer: colors.accentDark,
+    background: colors.backgroundDark,
+    surface: colors.surfaceDark,
+    surfaceVariant: colors.surfaceVariantDark,
+    error: colors.errorDark,
+    onPrimary: "#FFFFFF",
+    onSecondary: "#FFFFFF",
+    onBackground: colors.textPrimaryDark,
+    onSurface: colors.textPrimaryDark,
+    onSurfaceVariant: colors.textSecondaryDark,
+    outline: colors.textSecondaryDark,
+  },
+};
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -149,9 +194,10 @@ export default function App() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [session?.user?.id]);
+  }, [session]);
 
-  const paperTheme = colorScheme === "dark" ? MD3DarkTheme : MD3LightTheme;
+  const paperTheme =
+    colorScheme === "dark" ? customDarkTheme : customLightTheme;
   const navigationTheme = colorScheme === "dark" ? navDarkTheme : navLightTheme;
 
   const refreshSession = useCallback(async () => {
