@@ -26,6 +26,10 @@ export const colors = {
   pendingDark: "#F59E0B",
   approved: "#10B981",
   approvedDark: "#059669",
+  pendingReview: "#60A5FA",
+  pendingReviewDark: "#3B82F6",
+  flagged: "#F97316",
+  flaggedDark: "#EA580C",
 
   // Gradients
   gradientStart: "#1E88E5",

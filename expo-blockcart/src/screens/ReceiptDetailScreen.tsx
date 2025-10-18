@@ -13,6 +13,7 @@ import { spacing } from "../theme/colors";
 const DETAIL_FIELDS: Array<{ label: string; key: keyof Receipt }> = [
   { label: "Store", key: "store" },
   { label: "Total", key: "total" },
+  { label: "Receipt Date", key: "receipt_date" },
   { label: "Status", key: "status" },
 ];
 
@@ -25,6 +26,7 @@ type ReceiptRow = Pick<
   | "status"
   | "parsed_json"
   | "image_url"
+  | "receipt_date"
 >;
 
 type Props = NativeStackScreenProps<ReceiptsStackParamList, "ReceiptDetail">;
@@ -49,7 +51,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
         const { data, error: queryError } = await supabase
           .from("receipts")
           .select(
-            "id, created_at, store, total, status, parsed_json, image_url"
+            "id, created_at, store, total, status, parsed_json, image_url, receipt_date"
           )
           .eq("id", route.params.receiptId)
           .eq("user_id", session.user.id)
@@ -136,16 +138,27 @@ export default function ReceiptDetailScreen({ route }: Props) {
             if (value === null || value === undefined) {
               return null;
             }
+
+            const formattedValue = (() => {
+              if (field.key === "total") {
+                return `$${Number(value).toFixed(2)}`;
+              }
+              if (field.key === "reward_amount") {
+                return `${Number(value).toFixed(2)} BCT$`;
+              }
+              if (field.key === "receipt_date") {
+                const parsed = new Date(String(value));
+                return isNaN(parsed.getTime())
+                  ? String(value)
+                  : parsed.toLocaleDateString();
+              }
+              return String(value);
+            })();
+
             return (
               <View key={field.key}>
                 <Text variant="labelLarge">{field.label}</Text>
-                <Text variant="bodyLarge">
-                  {field.key === "total"
-                    ? `$${Number(value).toFixed(2)}`
-                    : field.key === "reward_amount"
-                    ? `${Number(value).toFixed(2)} BCT$`
-                    : String(value)}
-                </Text>
+                <Text variant="bodyLarge">{formattedValue}</Text>
               </View>
             );
           })}
