@@ -10,22 +10,20 @@ import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import LoadingView from "../components/LoadingView";
 
 const DETAIL_FIELDS: Array<{ label: string; key: keyof Receipt }> = [
-  { label: "Store", key: "store_name" },
+  { label: "Store", key: "store" },
   { label: "Total", key: "total" },
   { label: "Status", key: "status" },
-  { label: "Reward", key: "reward_amount" },
 ];
 
 type ReceiptRow = Pick<
   Receipt,
   | "id"
   | "created_at"
-  | "store_name"
+  | "store"
   | "total"
   | "status"
   | "parsed_json"
   | "image_url"
-  | "reward_amount"
 >;
 
 type Props = NativeStackScreenProps<ReceiptsStackParamList, "ReceiptDetail">;
@@ -50,7 +48,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
         const { data, error: queryError } = await supabase
           .from("receipts")
           .select(
-            "id, created_at, store_name, total, status, parsed_json, image_url, reward_amount"
+            "id, created_at, store, total, status, parsed_json, image_url"
           )
           .eq("id", route.params.receiptId)
           .eq("user_id", session.user.id)
@@ -89,7 +87,9 @@ export default function ReceiptDetailScreen({ route }: Props) {
 
   if (error) {
     return (
-      <Surface style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <Surface
+        style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+      >
         <Text style={{ color: theme.colors.error }}>{error}</Text>
       </Surface>
     );
@@ -97,7 +97,9 @@ export default function ReceiptDetailScreen({ route }: Props) {
 
   if (!receipt) {
     return (
-      <Surface style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <Surface
+        style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+      >
         <Text>No receipt found.</Text>
       </Surface>
     );
@@ -111,13 +113,16 @@ export default function ReceiptDetailScreen({ route }: Props) {
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
       <Card>
         <Card.Content style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text variant="titleLarge">
-              {receipt.store_name ?? "Pending OCR"}
-            </Text>
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}
+          >
+            <Text variant="titleLarge">{receipt.store ?? "Pending OCR"}</Text>
             <ReceiptStatusChip status={receipt.status} />
           </View>
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+          <Text
+            variant="bodyMedium"
+            style={{ color: theme.colors.onSurfaceVariant }}
+          >
             Submitted {new Date(receipt.created_at).toLocaleString()}
           </Text>
           {receipt.image_url ? (
@@ -152,7 +157,10 @@ export default function ReceiptDetailScreen({ route }: Props) {
         <Card.Title title="Parsed Data" subtitle="OCR extracted fields" />
         <Card.Content>
           {parsedFields.length === 0 ? (
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            <Text
+              variant="bodyMedium"
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
               OCR results will appear here once processing completes.
             </Text>
           ) : (

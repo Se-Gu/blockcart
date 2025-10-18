@@ -5,7 +5,7 @@ export type Receipt = {
   user_id?: string;
   created_at: string;
   image_url?: string | null;
-  store_name: string | null;
+  store: string | null; // Changed from store_name to match schema
   total: number | null;
   status: ReceiptStatus;
   parsed_json?: Record<string, unknown> | null;

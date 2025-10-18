@@ -27,6 +27,7 @@ import LoginScreen from "./screens/LoginScreen";
 import { supabase } from "./lib/supabase";
 import { AuthContext } from "./context/AuthContext";
 import LoadingView from "./components/LoadingView";
+import { ToastProvider } from "./components/ToastProvider";
 import type { Receipt } from "./types";
 
 Notifications.setNotificationHandler({
@@ -79,7 +80,10 @@ export default function App() {
       }
     };
 
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
     return () => {
       subscription.remove();
     };
@@ -148,8 +152,7 @@ export default function App() {
   }, [session?.user?.id]);
 
   const paperTheme = colorScheme === "dark" ? MD3DarkTheme : MD3LightTheme;
-  const navigationTheme =
-    colorScheme === "dark" ? navDarkTheme : navLightTheme;
+  const navigationTheme = colorScheme === "dark" ? navDarkTheme : navLightTheme;
 
   const refreshSession = useCallback(async () => {
     const {
@@ -182,11 +185,13 @@ export default function App() {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <AuthContext.Provider value={authContextValue}>
-        <NavigationContainer theme={navigationTheme}>
-          {session ? <MainNavigator /> : <LoginScreen />}
-        </NavigationContainer>
-      </AuthContext.Provider>
+      <ToastProvider>
+        <AuthContext.Provider value={authContextValue}>
+          <NavigationContainer theme={navigationTheme}>
+            {session ? <MainNavigator /> : <LoginScreen />}
+          </NavigationContainer>
+        </AuthContext.Provider>
+      </ToastProvider>
     </PaperProvider>
   );
 }

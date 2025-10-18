@@ -13,6 +13,7 @@ import {
 } from "react-native-paper";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useErrorHandler } from "../hooks/useErrorHandler";
 import type { AppTabParamList } from "../navigation/MainNavigator";
 import type { Receipt, UserBalance } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
@@ -22,7 +23,7 @@ const MAX_RECENT_RECEIPTS = 3;
 type BalanceRow = Pick<UserBalance, "total_balance">;
 type RecentReceiptRow = Pick<
   Receipt,
-  "id" | "created_at" | "store_name" | "total" | "status" | "parsed_json" | "reward_amount"
+  "id" | "created_at" | "store" | "total" | "status" | "parsed_json"
 >;
 
 type Props = BottomTabScreenProps<AppTabParamList, "Home">;
@@ -30,18 +31,17 @@ type Props = BottomTabScreenProps<AppTabParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
   const { session } = useAuth();
   const theme = useTheme();
+  const { handleError } = useErrorHandler({ context: "Loading Home Data" });
   const [balance, setBalance] = useState<number | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!session?.user) {
       return;
     }
     setLoading(true);
-    setError(null);
     try {
       const [balanceResponse, receiptsResponse] = await Promise.all([
         supabase
@@ -51,9 +51,7 @@ export default function HomeScreen({ navigation }: Props) {
           .maybeSingle(),
         supabase
           .from("receipts")
-          .select(
-            "id, created_at, store_name, total, status, parsed_json, reward_amount"
-          )
+          .select("id, created_at, store, total, status, parsed_json")
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(MAX_RECENT_RECEIPTS),
@@ -75,13 +73,12 @@ export default function HomeScreen({ navigation }: Props) {
       setBalance(balanceData?.total_balance ?? 0);
       setReceipts(receiptsData as Receipt[]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      handleError(err, "Loading home data");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, handleError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -150,7 +147,7 @@ export default function HomeScreen({ navigation }: Props) {
                   }}
                 >
                   <List.Item
-                    title={receipt.store_name ?? "Pending OCR"}
+                    title={receipt.store ?? "Pending OCR"}
                     description={`$${
                       receipt.total?.toFixed(2) ?? "--"
                     } • ${new Date(receipt.created_at).toLocaleDateString()}`}
@@ -203,19 +200,13 @@ export default function HomeScreen({ navigation }: Props) {
         </Card.Content>
       </Card>
 
-      {error ? (
-        <Surface
-          style={{
-            padding: 12,
-            borderRadius: 12,
-            backgroundColor: theme.dark
-              ? theme.colors.errorContainer
-              : "#fee2e2",
-          }}
-        >
-          <Text style={{ color: theme.colors.error }}>{error}</Text>
+      {loading && (
+        <Surface style={{ padding: 16, borderRadius: 12 }}>
+          <Text variant="bodyMedium" style={{ textAlign: "center" }}>
+            Loading your data...
+          </Text>
         </Surface>
-      ) : null}
+      )}
     </ScrollView>
   );
 }
