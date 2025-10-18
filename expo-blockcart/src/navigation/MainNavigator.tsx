@@ -1,8 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  NavigatorScreenParams,
-  ParamListBase,
-} from "@react-navigation/native";
+import { NavigatorScreenParams, ParamListBase } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "react-native-paper";
@@ -13,6 +10,7 @@ import UploadReceiptScreen from "../screens/UploadReceiptScreen";
 import WalletScreen from "../screens/WalletScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import ReferralScreen from "../screens/ReferralScreen";
+import AppHeader from "../components/AppHeader";
 
 export type ReceiptsStackParamList = {
   ReceiptList: undefined;
@@ -52,12 +50,8 @@ const tabScreenOptions: Record<keyof AppTabParamList, ScreenOptions> = {
 
 function ReceiptsStackNavigator() {
   return (
-    <ReceiptsStack.Navigator>
-      <ReceiptsStack.Screen
-        name="ReceiptList"
-        component={ReceiptListScreen}
-        options={{ title: "My Receipts" }}
-      />
+    <ReceiptsStack.Navigator screenOptions={{ headerShown: false }}>
+      <ReceiptsStack.Screen name="ReceiptList" component={ReceiptListScreen} />
       <ReceiptsStack.Screen
         name="ReceiptDetail"
         component={ReceiptDetailScreen}
@@ -74,12 +68,8 @@ function ReceiptsStackNavigator() {
 
 function ProfileStackNavigator() {
   return (
-    <ProfileStack.Navigator>
-      <ProfileStack.Screen
-        name="ProfileMain"
-        component={ProfileScreen}
-        options={{ title: "Profile" }}
-      />
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen
         name="Referral"
         component={ReferralScreen}
@@ -94,7 +84,11 @@ export default function MainNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
+        header: () => (
+          <AppHeader
+            title={tabScreenOptions[route.name as keyof AppTabParamList].title}
+          />
+        ),
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.outline,
         tabBarStyle: {
@@ -102,7 +96,13 @@ export default function MainNavigator() {
         },
         tabBarIcon: ({ color, size }) => {
           const config = tabScreenOptions[route.name as keyof AppTabParamList];
-          return <MaterialCommunityIcons name={config.tabBarIcon} color={color} size={size} />;
+          return (
+            <MaterialCommunityIcons
+              name={config.tabBarIcon}
+              color={color}
+              size={size}
+            />
+          );
         },
         title: tabScreenOptions[route.name as keyof AppTabParamList].title,
       })}

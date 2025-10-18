@@ -117,7 +117,7 @@ export default function ProfileScreen({ navigation }: Props) {
   }, [age, loadProfile, session?.user?.id, sex, showSuccess, handleError]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingTop: 8 }}>
       <Card>
         <Card.Content style={{ gap: 12 }}>
           <Text variant="titleMedium">Account</Text>
