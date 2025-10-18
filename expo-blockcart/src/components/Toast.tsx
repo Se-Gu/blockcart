@@ -122,102 +122,108 @@ export default function Toast({
     }
   };
 
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      position: "absolute",
+      top: Platform.OS === "ios" ? 60 : 40,
+      left: 16,
+      right: 16,
+      zIndex: 9999,
+    },
+    toast: {
+      borderRadius: 8,
+      borderLeftWidth: 4,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      minHeight: 60,
+    },
+    content: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      flex: 1,
+    },
+    icon: {
+      fontSize: 20,
+      color: theme.colors.onPrimary,
+      marginRight: 12,
+      fontWeight: "bold",
+    },
+    message: {
+      flex: 1,
+      fontSize: 14,
+      color: theme.colors.onPrimary,
+      fontWeight: "500",
+      lineHeight: 20,
+    },
+    actionButton: {
+      marginLeft: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: 4,
+    },
+    actionText: {
+      color: theme.colors.onPrimary,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    closeButton: {
+      position: "absolute",
+      top: 8,
+      right: 8,
+      width: 24,
+      height: 24,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    closeText: {
+      color: theme.colors.onPrimary,
+      fontSize: 18,
+      fontWeight: "bold",
+    },
+  });
+
   if (!visible) return null;
 
   return (
     <Animated.View
       style={[
-        styles.container,
+        dynamicStyles.container,
         {
           transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
         },
       ]}
     >
-      <View style={[styles.toast, getToastStyles()]}>
-        <View style={styles.content}>
-          <Text style={styles.icon}>{getIcon()}</Text>
-          <Text style={styles.message} numberOfLines={3}>
+      <View style={[dynamicStyles.toast, getToastStyles()]}>
+        <View style={dynamicStyles.content}>
+          <Text style={dynamicStyles.icon}>{getIcon()}</Text>
+          <Text style={dynamicStyles.message} numberOfLines={3}>
             {message}
           </Text>
           {action && (
             <TouchableOpacity
-              style={styles.actionButton}
+              style={dynamicStyles.actionButton}
               onPress={() => {
                 action.onPress();
                 hideToast();
               }}
             >
-              <Text style={styles.actionText}>{action.label}</Text>
+              <Text style={dynamicStyles.actionText}>{action.label}</Text>
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.closeButton} onPress={hideToast}>
-          <Text style={styles.closeText}>×</Text>
+        <TouchableOpacity style={dynamicStyles.closeButton} onPress={hideToast}>
+          <Text style={dynamicStyles.closeText}>×</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 60 : 40,
-    left: 16,
-    right: 16,
-    zIndex: 9999,
-  },
-  toast: {
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
-    elevation: 5,
-    minHeight: 60,
-  },
-  content: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    flex: 1,
-  },
-  icon: {
-    fontSize: 20,
-    color: "#FFFFFF",
-    marginRight: 12,
-    fontWeight: "bold",
-  },
-  message: {
-    flex: 1,
-    fontSize: 14,
-    color: "#FFFFFF",
-    fontWeight: "500",
-    lineHeight: 20,
-  },
-  actionButton: {
-    marginLeft: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 4,
-  },
-  actionText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  closeButton: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-});

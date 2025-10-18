@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView } from "react-native";
+import { Alert, ScrollView, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Button, Card, Text, TextInput, useTheme } from "react-native-paper";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { ProfileStackParamList } from "../navigation/MainNavigator";
 import type { Profile } from "../types";
+import { spacing } from "../theme/colors";
 
 const REFERRALS_TABLE = "referrals";
 
@@ -105,9 +106,9 @@ export default function ReferralScreen(_props: Props) {
   }, [loadReferralData]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Card>
-        <Card.Content style={{ gap: 8 }}>
+        <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">Your referral code</Text>
           <Text variant="headlineMedium">
             {profile?.referral_code ?? "Generating..."}
@@ -120,7 +121,7 @@ export default function ReferralScreen(_props: Props) {
       </Card>
 
       <Card>
-        <Card.Content style={{ gap: 12 }}>
+        <Card.Content style={styles.sectionContent}>
           <Text variant="titleMedium">Enter a referral code</Text>
           <Text style={{ color: theme.colors.onSurfaceVariant }}>
             If someone invited you, enter their code below to link your account.
@@ -150,7 +151,7 @@ export default function ReferralScreen(_props: Props) {
       </Card>
 
       <Card>
-        <Card.Content>
+        <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">Bonuses earned from referrals</Text>
           <Text variant="headlineSmall" style={{ marginTop: 8 }}>
             {bonusEarned.toFixed(2)} BCT$
@@ -167,3 +168,18 @@ export default function ReferralScreen(_props: Props) {
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  cardContent: {
+    gap: spacing.xs,
+  },
+  sectionContent: {
+    gap: spacing.sm,
+  },
+});

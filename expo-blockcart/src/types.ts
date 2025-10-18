@@ -33,5 +33,7 @@ export type Profile = {
   referred_by?: string | null;
   age?: number | null;
   sex?: string | null;
+  kyc_age?: number | null;
+  kyc_sex?: string | null;
   bonus_total?: number | null;
 };

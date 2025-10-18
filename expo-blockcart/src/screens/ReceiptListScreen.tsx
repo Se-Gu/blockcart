@@ -124,7 +124,7 @@ export default function ReceiptListScreen({ navigation }: Props) {
                 <IconButton
                   icon="camera-plus"
                   size={24}
-                  iconColor="#FFFFFF"
+                  iconColor={theme.colors.onPrimary}
                   style={{ margin: 0 }}
                   onPress={() => navigation.navigate("UploadReceipt")}
                 />
@@ -207,7 +207,7 @@ export default function ReceiptListScreen({ navigation }: Props) {
             icon="plus"
             style={styles.fab}
             onPress={() => navigation.navigate("UploadReceipt")}
-            color="#FFFFFF"
+            color={theme.colors.onPrimary}
             customSize={56}
           />
         </LinearGradient>
@@ -218,7 +218,8 @@ export default function ReceiptListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
     gap: spacing.md,
     paddingBottom: 100,
   },

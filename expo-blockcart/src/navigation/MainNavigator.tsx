@@ -50,8 +50,31 @@ const tabScreenOptions: Record<keyof AppTabParamList, ScreenOptions> = {
 
 function ReceiptsStackNavigator() {
   return (
-    <ReceiptsStack.Navigator screenOptions={{ headerShown: false }}>
-      <ReceiptsStack.Screen name="ReceiptList" component={ReceiptListScreen} />
+    <ReceiptsStack.Navigator
+      screenOptions={({ navigation }) => ({
+        header: ({ navigation: headerNavigation, options, route, back }) => (
+          <AppHeader
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : options.title ?? route.name
+            }
+            canGoBack={!!back}
+            onBackPress={() => headerNavigation.goBack()}
+            onNavigateToProfile={() =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+          />
+        ),
+      })}
+    >
+      <ReceiptsStack.Screen
+        name="ReceiptList"
+        component={ReceiptListScreen}
+        options={{ title: "Receipts" }}
+      />
       <ReceiptsStack.Screen
         name="ReceiptDetail"
         component={ReceiptDetailScreen}
@@ -68,8 +91,31 @@ function ReceiptsStackNavigator() {
 
 function ProfileStackNavigator() {
   return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+    <ProfileStack.Navigator
+      screenOptions={({ navigation }) => ({
+        header: ({ navigation: headerNavigation, options, route, back }) => (
+          <AppHeader
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : options.title ?? route.name
+            }
+            canGoBack={!!back}
+            onBackPress={() => headerNavigation.goBack()}
+            onNavigateToProfile={() =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+          />
+        ),
+      })}
+    >
+      <ProfileStack.Screen
+        name="ProfileMain"
+        component={ProfileScreen}
+        options={{ title: "Profile" }}
+      />
       <ProfileStack.Screen
         name="Referral"
         component={ReferralScreen}
@@ -83,34 +129,68 @@ export default function MainNavigator() {
   const theme = useTheme();
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        header: () => (
-          <AppHeader
-            title={tabScreenOptions[route.name as keyof AppTabParamList].title}
-          />
-        ),
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.outline,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-        },
-        tabBarIcon: ({ color, size }) => {
-          const config = tabScreenOptions[route.name as keyof AppTabParamList];
-          return (
-            <MaterialCommunityIcons
-              name={config.tabBarIcon}
-              color={color}
-              size={size}
-            />
-          );
-        },
-        title: tabScreenOptions[route.name as keyof AppTabParamList].title,
-      })}
+      screenOptions={({ route }) => {
+        // Only show tab-level headers for simple screens, not stack-based ones
+        const isStackScreen =
+          route.name === "Receipts" || route.name === "Profile";
+
+        return {
+          ...(isStackScreen
+            ? {}
+            : {
+                header: ({ navigation, options }) => (
+                  <AppHeader
+                    title={
+                      typeof options.headerTitle === "string"
+                        ? options.headerTitle
+                        : tabScreenOptions[route.name as keyof AppTabParamList]
+                            .title
+                    }
+                    canGoBack={false}
+                    onBackPress={() => navigation.goBack()}
+                    onNavigateToProfile={() =>
+                      navigation.navigate("Profile", { screen: "ProfileMain" })
+                    }
+                  />
+                ),
+              }),
+          tabBarActiveTintColor: theme.colors.primary,
+          tabBarInactiveTintColor: theme.colors.outline,
+          tabBarStyle: {
+            backgroundColor: theme.colors.surface,
+          },
+          tabBarIcon: ({ color, size }) => {
+            const config =
+              tabScreenOptions[route.name as keyof AppTabParamList];
+            return (
+              <MaterialCommunityIcons
+                name={config.tabBarIcon}
+                color={color}
+                size={size}
+              />
+            );
+          },
+          title: tabScreenOptions[route.name as keyof AppTabParamList].title,
+        };
+      }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Receipts" component={ReceiptsStackNavigator} />
+      <Tab.Screen
+        name="Receipts"
+        component={ReceiptsStackNavigator}
+        options={{ headerShown: false }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate("Receipts", { screen: "ReceiptList" });
+          },
+        })}
+      />
       <Tab.Screen name="Wallet" component={WalletScreen} />
-      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStackNavigator}
+        options={{ headerShown: false }}
+      />
     </Tab.Navigator>
   );
 }
