@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, Image, ScrollView, View } from "react-native";
+import { Image, ScrollView, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Button,
@@ -13,6 +13,8 @@ import * as ImagePicker from "expo-image-picker";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useErrorHandler } from "../hooks/useErrorHandler";
+import { useToast } from "../components/ToastProvider";
 import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
 import type { Receipt } from "../types";
 
@@ -23,9 +25,10 @@ type Props = NativeStackScreenProps<ReceiptsStackParamList, "UploadReceipt">;
 export default function UploadReceiptScreen({ navigation }: Props) {
   const theme = useTheme();
   const { session } = useAuth();
-  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(
-    null
-  );
+  const { handleError } = useErrorHandler({ context: "Receipt Upload" });
+  const { showSuccess, showWarning } = useToast();
+  const [selectedImage, setSelectedImage] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
 
@@ -44,7 +47,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
   const captureImage = useCallback(async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
     if (!cameraPermission.granted) {
-      Alert.alert("Camera access required", "Please enable camera permissions.");
+      showWarning("Camera access required. Please enable camera permissions.");
       return;
     }
 
@@ -55,7 +58,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     if (!result.canceled) {
       setSelectedImage(result.assets[0]);
     }
-  }, []);
+  }, [showWarning]);
 
   const checkDailyLimit = useCallback(async () => {
     if (!session?.user) {
@@ -64,35 +67,39 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const { count, error } = await supabase
-      .from("receipts")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", session.user.id)
-      .gte("created_at", today.toISOString());
+    try {
+      const { count, error } = await supabase
+        .from("receipts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", session.user.id)
+        .gte("created_at", today.toISOString());
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    if ((count ?? 0) >= DAILY_RECEIPT_LIMIT) {
-      Alert.alert(
-        "Daily limit reached",
-        `You can submit up to ${DAILY_RECEIPT_LIMIT} receipts per day.`
-      );
+      if ((count ?? 0) >= DAILY_RECEIPT_LIMIT) {
+        showWarning(
+          `Daily limit reached. You can submit up to ${DAILY_RECEIPT_LIMIT} receipts per day.`
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      handleError(error, "Checking daily limit");
       return false;
     }
-
-    return true;
-  }, [session?.user]);
+  }, [session?.user, showWarning, handleError]);
 
   const handleSubmit = useCallback(async () => {
     if (!session?.user) {
-      Alert.alert("Not signed in", "You must be signed in to upload receipts.");
+      showWarning("You must be signed in to upload receipts.");
       return;
     }
 
     if (!selectedImage) {
-      Alert.alert("No image", "Please select or capture a receipt first.");
+      showWarning("Please select or capture a receipt first.");
       return;
     }
 
@@ -148,16 +155,24 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         },
       });
 
+      showSuccess(
+        "Receipt uploaded successfully! Processing will begin shortly."
+      );
       setSuccessVisible(true);
       setSelectedImage(null);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to submit receipt.";
-      Alert.alert("Upload failed", message);
+      handleError(error, "Uploading receipt");
     } finally {
       setSubmitting(false);
     }
-  }, [checkDailyLimit, selectedImage, session?.user]);
+  }, [
+    checkDailyLimit,
+    selectedImage,
+    session?.user,
+    showWarning,
+    showSuccess,
+    handleError,
+  ]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
@@ -237,8 +252,8 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             variant="bodyMedium"
             style={{ marginTop: 8, color: theme.colors.onSurfaceVariant }}
           >
-            Our team is parsing your receipt details. You'll be notified when it's
-            approved.
+            Our team is parsing your receipt details. You'll be notified when
+            it's approved.
           </Text>
           <Button
             mode="contained"

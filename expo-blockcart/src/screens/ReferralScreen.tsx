@@ -10,9 +10,12 @@ import type { Profile } from "../types";
 const REFERRALS_TABLE = "referrals";
 
 type ReferralRewardRow = {
-  bonus_amount: number | null;
+  bonus: number | null;
 };
-type ProfileRow = Pick<Profile, "referral_code" | "referred_by" | "bonus_total">;
+type ProfileRow = Pick<
+  Profile,
+  "referral_code" | "referred_by" | "bonus_total"
+>;
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "Referral">;
 
@@ -32,14 +35,14 @@ export default function ReferralScreen(_props: Props) {
     try {
       const [profileResponse, rewardsResponse] = await Promise.all([
         supabase
-          .from("profiles")
-          .select("referral_code, referred_by, bonus_total")
+          .from("users")
+          .select("referral_code, referred_by")
           .eq("id", session.user.id)
           .maybeSingle(),
         supabase
           .from(REFERRALS_TABLE)
-          .select("bonus_amount")
-          .eq("referrer_id", session.user.id),
+          .select("bonus")
+          .eq("referrer", session.user.id),
       ]);
 
       if (profileResponse.error) {
@@ -50,13 +53,12 @@ export default function ReferralScreen(_props: Props) {
       }
 
       const profileData = profileResponse.data as ProfileRow | null;
-      setProfile(
-        profileData ? { id: session.user.id, ...profileData } : null
-      );
+      setProfile(profileData ? { id: session.user.id, ...profileData } : null);
 
-      const rewardRows = (rewardsResponse.data as ReferralRewardRow[] | null) ?? [];
+      const rewardRows =
+        (rewardsResponse.data as ReferralRewardRow[] | null) ?? [];
       const computedBonus = rewardRows.reduce(
-        (acc, item) => acc + (item.bonus_amount ?? 0),
+        (acc, item) => acc + (item.bonus ?? 0),
         0
       );
       setBonusEarned(computedBonus);
@@ -79,7 +81,7 @@ export default function ReferralScreen(_props: Props) {
     setLoading(true);
     try {
       const { error } = await supabase
-        .from("profiles")
+        .from("users")
         .update({ referred_by: referralInput })
         .eq("id", session.user.id);
 
@@ -138,7 +140,10 @@ export default function ReferralScreen(_props: Props) {
           >
             Submit code
           </Button>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+          <Text
+            variant="bodySmall"
+            style={{ color: theme.colors.onSurfaceVariant }}
+          >
             Current referred by: {profile?.referred_by ?? "None"}
           </Text>
         </Card.Content>
@@ -151,7 +156,9 @@ export default function ReferralScreen(_props: Props) {
             {bonusEarned.toFixed(2)} BCT$
           </Text>
           {profile?.bonus_total ? (
-            <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+            <Text
+              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+            >
               Platform reported total: {profile.bonus_total.toFixed(2)} BCT$
             </Text>
           ) : null}

@@ -1,16 +1,13 @@
 import { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 import { Text, TextInput, Button, Surface, useTheme } from "react-native-paper";
 import { supabase } from "../lib/supabase";
+import { parseError } from "../lib/errorParser";
+import { useToast } from "../components/ToastProvider";
 
 export default function LoginScreen() {
   const theme = useTheme();
+  const { showError } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,7 +15,7 @@ export default function LoginScreen() {
 
   const handleSubmit = async () => {
     if (!email || !password) {
-      Alert.alert("Missing information", "Email and password are required.");
+      showError("Email and password are required.");
       return;
     }
 
@@ -33,8 +30,7 @@ export default function LoginScreen() {
           throw error;
         }
         if (!data.session) {
-          Alert.alert(
-            "Verify your email",
+          showError(
             "Please check your inbox to confirm your email before logging in."
           );
         }
@@ -48,9 +44,9 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unexpected error occurred";
-      Alert.alert("Authentication failed", message);
+      const parsedError = parseError(error);
+      console.error("Auth error:", error);
+      showError(parsedError.message);
     } finally {
       setLoading(false);
     }

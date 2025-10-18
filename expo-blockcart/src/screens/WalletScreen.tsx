@@ -1,19 +1,27 @@
 import { useCallback, useState } from "react";
-import { Alert, RefreshControl, ScrollView, View } from "react-native";
+import { Alert, RefreshControl, ScrollView } from "react-native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
-import { Button, Card, List, Surface, Text, useTheme } from "react-native-paper";
+import {
+  Button,
+  Card,
+  List,
+  Surface,
+  Text,
+  useTheme,
+} from "react-native-paper";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { AppTabParamList } from "../navigation/MainNavigator";
 import type { Reward, UserBalance } from "../types";
 import LoadingView from "../components/LoadingView";
+import { useErrorHandler } from "../hooks/useErrorHandler";
 
 const TRANSACTION_LIMIT = 10;
 
 type RewardRow = Reward & {
   receipt?: {
-    store_name: string | null;
+    store: string | null;
   } | null;
 };
 
@@ -24,18 +32,17 @@ type Props = BottomTabScreenProps<AppTabParamList, "Wallet">;
 export default function WalletScreen(_props: Props) {
   const { session } = useAuth();
   const theme = useTheme();
+  const { handleError } = useErrorHandler({ context: "Wallet" });
   const [totalBalance, setTotalBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<RewardRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const loadWallet = useCallback(async () => {
     if (!session?.user) {
       return;
     }
     setLoading(true);
-    setError(null);
     try {
       const [balanceResponse, rewardsResponse] = await Promise.all([
         supabase
@@ -45,9 +52,7 @@ export default function WalletScreen(_props: Props) {
           .maybeSingle(),
         supabase
           .from("rewards")
-          .select(
-            "id, amount, created_at, description, receipt:receipts(store_name)"
-          )
+          .select("id, amount, created_at, receipt:receipts(store)")
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(TRANSACTION_LIMIT),
@@ -69,13 +74,12 @@ export default function WalletScreen(_props: Props) {
       setTotalBalance(balanceData?.total_balance ?? 0);
       setTransactions(rewardRows);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      handleError(err, "Loading wallet");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, handleError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,7 +115,9 @@ export default function WalletScreen(_props: Props) {
           <Button
             mode="outlined"
             style={{ marginTop: 16 }}
-            onPress={() => Alert.alert("Coming soon", "Wallet connection is on the roadmap.")}
+            onPress={() =>
+              Alert.alert("Coming soon", "Wallet connection is on the roadmap.")
+            }
           >
             Connect Wallet
           </Button>
@@ -127,11 +133,17 @@ export default function WalletScreen(_props: Props) {
             </Text>
           ) : (
             transactions.map((reward) => (
-              <Surface key={reward.id} style={{ borderRadius: 12 }} elevation={1}>
+              <Surface
+                key={reward.id}
+                style={{ borderRadius: 12 }}
+                elevation={1}
+              >
                 <List.Item
-                  title={`${reward.description ?? "Receipt reward"}`}
-                  description={`${new Date(reward.created_at).toLocaleString()} • ${
-                    reward.receipt?.store_name ?? "Unknown store"
+                  title="Receipt reward"
+                  description={`${new Date(
+                    reward.created_at
+                  ).toLocaleString()} • ${
+                    reward.receipt?.store ?? "Unknown store"
                   }`}
                   right={() => (
                     <Text style={{ fontWeight: "600" }}>
@@ -144,12 +156,6 @@ export default function WalletScreen(_props: Props) {
           )}
         </Card.Content>
       </Card>
-
-      {error ? (
-        <View style={{ padding: 12 }}>
-          <Text style={{ color: theme.colors.error }}>{error}</Text>
-        </View>
-      ) : null}
     </ScrollView>
   );
 }

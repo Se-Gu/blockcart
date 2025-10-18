@@ -1,26 +1,46 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Button, Card, Text, TextInput, useTheme } from "react-native-paper";
+import {
+  Button,
+  Card,
+  Text,
+  TextInput,
+  useTheme,
+  List,
+} from "react-native-paper";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useErrorHandler } from "../hooks/useErrorHandler";
+import { useToast } from "../components/ToastProvider";
 import type { ProfileStackParamList } from "../navigation/MainNavigator";
 import type { Profile } from "../types";
 
-const SEX_OPTIONS = ["male", "female", "non-binary", "prefer_not_to_say"] as const;
+const SEX_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "non-binary", label: "Non-binary" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+] as const;
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "ProfileMain">;
 
-type SexOption = (typeof SEX_OPTIONS)[number];
+type SexOption = (typeof SEX_OPTIONS)[number]["value"];
 
 export default function ProfileScreen({ navigation }: Props) {
   const theme = useTheme();
   const { session, signOut } = useAuth();
+  const { handleError } = useErrorHandler({ context: "Profile Management" });
+  const { showSuccess } = useToast();
   const [age, setAge] = useState<string>("");
   const [sex, setSex] = useState<SexOption | "">("");
   const [loading, setLoading] = useState(false);
+  const [showSexOptions, setShowSexOptions] = useState(false);
 
-  type ProfileRow = Pick<Profile, "age" | "sex" | "referral_code" | "referred_by">;
+  type ProfileRow = Pick<
+    Profile,
+    "age" | "sex" | "referral_code" | "referred_by"
+  >;
 
   const loadProfile = useCallback(async () => {
     if (!session?.user) {
@@ -29,25 +49,30 @@ export default function ProfileScreen({ navigation }: Props) {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("age, sex, referral_code, referred_by")
+        .from("users")
+        .select("kyc_age, kyc_sex, referral_code, referred_by")
         .eq("id", session.user.id)
         .maybeSingle();
+
+      console.log("Load profile - Session user ID:", session.user.id);
+      console.log("Load profile - Query result:", data);
+      console.log("Load profile - Error:", error);
 
       if (error) {
         throw error;
       }
 
       const profileData = data as ProfileRow | null;
-      setAge(profileData?.age ? String(profileData.age) : "");
-      setSex(((profileData?.sex as SexOption | null) ?? "") as SexOption | "");
+      setAge(profileData?.kyc_age ? String(profileData.kyc_age) : "");
+      setSex(
+        ((profileData?.kyc_sex as SexOption | null) ?? "") as SexOption | ""
+      );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert("Unable to load profile", message);
+      handleError(err, "Loading profile");
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, handleError]);
 
   useEffect(() => {
     void loadProfile();
@@ -60,26 +85,36 @@ export default function ProfileScreen({ navigation }: Props) {
     setLoading(true);
     try {
       const updates = {
-        id: session.user.id,
-        age: age ? Number(age) : null,
-        sex: sex || null,
-        updated_at: new Date().toISOString(),
+        kyc_age: age ? Number(age) : null,
+        kyc_sex: sex || null,
       };
 
-      const { error } = await supabase.from("profiles").upsert(updates);
+      const { data, error } = await supabase
+        .from("users")
+        .update(updates)
+        .eq("id", session.user.id)
+        .select("kyc_age, kyc_sex");
+
       if (error) {
         throw error;
       }
 
-      Alert.alert("Profile updated", "Your information has been saved.");
+      console.log("Update result:", data);
+      console.log("Session user ID:", session.user.id);
+      console.log("Updates being sent:", updates);
+
+      if (!data || data.length === 0) {
+        throw new Error("No rows were updated. Check RLS policies.");
+      }
+
+      showSuccess("Your profile information has been saved.");
       await loadProfile();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert("Unable to update profile", message);
+      handleError(err, "Updating profile");
     } finally {
       setLoading(false);
     }
-  }, [age, loadProfile, session?.user?.id, sex]);
+  }, [age, loadProfile, session?.user?.id, sex, showSuccess, handleError]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
@@ -114,10 +149,39 @@ export default function ProfileScreen({ navigation }: Props) {
           <TextInput
             label="Sex"
             mode="outlined"
-            value={sex}
-            onChangeText={(value) => setSex(value as SexOption | "")}
-            placeholder={SEX_OPTIONS.join(", ")}
+            value={
+              SEX_OPTIONS.find((option) => option.value === sex)?.label || ""
+            }
+            editable={false}
+            right={
+              <TextInput.Icon
+                icon={showSexOptions ? "chevron-up" : "chevron-down"}
+                onPress={() => setShowSexOptions(!showSexOptions)}
+              />
+            }
           />
+          {showSexOptions && (
+            <View
+              style={{
+                marginTop: 8,
+                backgroundColor: theme.colors.surface,
+                borderRadius: 8,
+                elevation: 2,
+              }}
+            >
+              {SEX_OPTIONS.map((option) => (
+                <List.Item
+                  key={option.value}
+                  title={option.label}
+                  onPress={() => {
+                    setSex(option.value);
+                    setShowSexOptions(false);
+                  }}
+                  style={{ paddingHorizontal: 16 }}
+                />
+              ))}
+            </View>
+          )}
           <Button
             mode="contained"
             onPress={handleSave}
@@ -134,17 +198,12 @@ export default function ProfileScreen({ navigation }: Props) {
           <Button
             mode="text"
             textColor={theme.colors.error}
-            onPress={() => {
-              Alert.alert("Sign out", "Are you sure you want to sign out?", [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Sign out",
-                  style: "destructive",
-                  onPress: () => {
-                    void signOut();
-                  },
-                },
-              ]);
+            onPress={async () => {
+              try {
+                await signOut();
+              } catch (error) {
+                console.error("Sign out error:", error);
+              }
             }}
           >
             Sign out
