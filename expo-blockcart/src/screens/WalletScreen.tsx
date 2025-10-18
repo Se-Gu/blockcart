@@ -106,34 +106,92 @@ export default function WalletScreen(_props: Props) {
     void loadWallet();
   }, [loadWallet, refreshing]);
 
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.lg,
+      gap: spacing.md,
+    },
+    balanceCard: {
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 6,
+      gap: spacing.sm,
+    },
+    balanceLabel: {
+      color: theme.colors.onPrimary,
+      opacity: 0.9,
+      fontWeight: "500",
+    },
+    balanceAmount: {
+      color: theme.colors.onPrimary,
+      fontWeight: "700",
+    },
+    connectButton: {
+      marginTop: spacing.md,
+      borderRadius: borderRadius.md,
+    },
+    card: {
+      borderRadius: borderRadius.lg,
+      elevation: 2,
+    },
+    transactionItem: {
+      borderRadius: borderRadius.md,
+      overflow: "hidden",
+    },
+    iconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: borderRadius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      marginLeft: spacing.sm,
+    },
+    rewardAmount: {
+      fontWeight: "700",
+      fontSize: 16,
+      color: colors.approved,
+      alignSelf: "center",
+      marginRight: spacing.sm,
+    },
+    emptyState: {
+      paddingVertical: spacing.xl,
+      alignItems: "center",
+    },
+  });
+
   if (loading && !transactions.length) {
     return <LoadingView message="Loading wallet" />;
   }
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={dynamicStyles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
       <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
+        colors={[theme.colors.primary, theme.colors.secondary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.balanceCard}
+        style={dynamicStyles.balanceCard}
       >
-        <Text variant="titleMedium" style={styles.balanceLabel}>
+        <Text variant="titleMedium" style={dynamicStyles.balanceLabel}>
           Total Balance
         </Text>
-        <Text variant="displayMedium" style={styles.balanceAmount}>
+        <Text variant="displayMedium" style={dynamicStyles.balanceAmount}>
           {totalBalance?.toFixed(2) ?? "0.00"} BCT$
         </Text>
         <Button
           mode="contained-tonal"
-          style={styles.connectButton}
+          style={dynamicStyles.connectButton}
           buttonColor="rgba(255, 255, 255, 0.2)"
-          textColor="#FFFFFF"
+          textColor={theme.colors.onPrimary}
           onPress={() =>
             Alert.alert("Coming soon", "Wallet connection is on the roadmap.")
           }
@@ -142,7 +200,7 @@ export default function WalletScreen(_props: Props) {
         </Button>
       </LinearGradient>
 
-      <Card style={styles.card}>
+      <Card style={dynamicStyles.card}>
         <Card.Title
           title="Transaction History"
           subtitle={`${transactions.length} recent rewards`}
@@ -150,7 +208,7 @@ export default function WalletScreen(_props: Props) {
         />
         <Card.Content style={{ gap: spacing.sm }}>
           {transactions.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={dynamicStyles.emptyState}>
               <IconButton
                 icon="wallet-outline"
                 size={64}
@@ -180,7 +238,7 @@ export default function WalletScreen(_props: Props) {
             transactions.map((reward) => (
               <Surface
                 key={reward.id}
-                style={styles.transactionItem}
+                style={dynamicStyles.transactionItem}
                 elevation={1}
               >
                 <List.Item
@@ -194,7 +252,7 @@ export default function WalletScreen(_props: Props) {
                   left={() => (
                     <View
                       style={[
-                        styles.iconContainer,
+                        dynamicStyles.iconContainer,
                         { backgroundColor: `${colors.approved}20` },
                       ]}
                     >
@@ -206,7 +264,7 @@ export default function WalletScreen(_props: Props) {
                     </View>
                   )}
                   right={() => (
-                    <Text style={styles.rewardAmount}>
+                    <Text style={dynamicStyles.rewardAmount}>
                       +{reward.amount.toFixed(2)} BCT$
                     </Text>
                   )}
@@ -219,61 +277,3 @@ export default function WalletScreen(_props: Props) {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
-  },
-  balanceCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-    gap: spacing.sm,
-  },
-  balanceLabel: {
-    color: "#FFFFFF",
-    opacity: 0.9,
-    fontWeight: "500",
-  },
-  balanceAmount: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  connectButton: {
-    marginTop: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  card: {
-    borderRadius: borderRadius.lg,
-    elevation: 2,
-  },
-  transactionItem: {
-    borderRadius: borderRadius.md,
-    overflow: "hidden",
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: spacing.sm,
-  },
-  rewardAmount: {
-    fontWeight: "700",
-    fontSize: 16,
-    color: colors.approved,
-    alignSelf: "center",
-    marginRight: spacing.sm,
-  },
-  emptyState: {
-    paddingVertical: spacing.xl,
-    alignItems: "center",
-  },
-});

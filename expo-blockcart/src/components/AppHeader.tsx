@@ -1,12 +1,7 @@
 "use client";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
-import {
-  IconButton,
-  Menu,
-  Text,
-  useTheme,
-} from "react-native-paper";
+import { IconButton, Menu, Text, useTheme } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "../theme/colors";
@@ -46,7 +41,7 @@ export default function AppHeader({
 
   return (
     <LinearGradient
-      colors={[colors.gradientStart, colors.gradientEnd]}
+      colors={[theme.colors.primary, theme.colors.secondary]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
       style={{
@@ -76,7 +71,7 @@ export default function AppHeader({
         <Text
           variant="headlineSmall"
           style={{
-            color: "#FFFFFF",
+            color: theme.colors.onPrimary,
             fontWeight: "600",
             textAlign: "center",
             letterSpacing: 0.5,

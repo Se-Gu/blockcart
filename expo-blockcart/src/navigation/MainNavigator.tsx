@@ -1,8 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  NavigatorScreenParams,
-  ParamListBase,
-} from "@react-navigation/native";
+import { NavigatorScreenParams, ParamListBase } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "react-native-paper";
@@ -132,43 +129,56 @@ export default function MainNavigator() {
   const theme = useTheme();
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        header: ({ navigation, options, back }) => (
-          <AppHeader
-            title={
-              typeof options.headerTitle === "string"
-                ? options.headerTitle
-                : tabScreenOptions[route.name as keyof AppTabParamList].title
-            }
-            canGoBack={!!back}
-            onBackPress={() => navigation.goBack()}
-            onNavigateToProfile={() =>
-              navigation.navigate("Profile", { screen: "ProfileMain" })
-            }
-          />
-        ),
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.outline,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-        },
-        tabBarIcon: ({ color, size }) => {
-          const config = tabScreenOptions[route.name as keyof AppTabParamList];
-          return (
-            <MaterialCommunityIcons
-              name={config.tabBarIcon}
-              color={color}
-              size={size}
-            />
-          );
-        },
-        title: tabScreenOptions[route.name as keyof AppTabParamList].title,
-      })}
+      screenOptions={({ route }) => {
+        // Only show tab-level headers for simple screens, not stack-based ones
+        const isStackScreen =
+          route.name === "Receipts" || route.name === "Profile";
+
+        return {
+          ...(isStackScreen
+            ? {}
+            : {
+                header: ({ navigation, options }) => (
+                  <AppHeader
+                    title={
+                      typeof options.headerTitle === "string"
+                        ? options.headerTitle
+                        : tabScreenOptions[route.name as keyof AppTabParamList]
+                            .title
+                    }
+                    canGoBack={false}
+                    onBackPress={() => navigation.goBack()}
+                    onNavigateToProfile={() =>
+                      navigation.navigate("Profile", { screen: "ProfileMain" })
+                    }
+                  />
+                ),
+              }),
+          tabBarActiveTintColor: theme.colors.primary,
+          tabBarInactiveTintColor: theme.colors.outline,
+          tabBarStyle: {
+            backgroundColor: theme.colors.surface,
+          },
+          tabBarIcon: ({ color, size }) => {
+            const config =
+              tabScreenOptions[route.name as keyof AppTabParamList];
+            return (
+              <MaterialCommunityIcons
+                name={config.tabBarIcon}
+                color={color}
+                size={size}
+              />
+            );
+          },
+          title: tabScreenOptions[route.name as keyof AppTabParamList].title,
+        };
+      }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen
         name="Receipts"
         component={ReceiptsStackNavigator}
+        options={{ headerShown: false }}
         listeners={({ navigation }) => ({
           tabPress: () => {
             navigation.navigate("Receipts", { screen: "ReceiptList" });
@@ -176,7 +186,11 @@ export default function MainNavigator() {
         })}
       />
       <Tab.Screen name="Wallet" component={WalletScreen} />
-      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStackNavigator}
+        options={{ headerShown: false }}
+      />
     </Tab.Navigator>
   );
 }

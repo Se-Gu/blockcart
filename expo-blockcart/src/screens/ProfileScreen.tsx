@@ -40,7 +40,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   type ProfileRow = Pick<
     Profile,
-    "age" | "sex" | "referral_code" | "referred_by"
+    "kyc_age" | "kyc_sex" | "referral_code" | "referred_by"
   >;
 
   const loadProfile = useCallback(async () => {
