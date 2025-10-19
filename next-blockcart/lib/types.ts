@@ -1,6 +1,12 @@
 export type UserRole = "admin" | "reviewer"
 
-export type ReceiptStatus = "pending" | "approved" | "rejected"
+export type ReceiptStatus =
+  | "pending"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "flagged"
+  | "error"
 
 export interface User {
   id: string
@@ -18,19 +24,34 @@ export interface User {
 
 export interface Receipt {
   id: string
-  user_id: string
-  user_email: string
-  user_name: string
+  user_id: string | null
+  user_email?: string | null
+  user_name?: string | null
   image_url: string
   total_amount: number
-  store_name: string
+  store_name?: string | null
   purchase_date: string
   status: ReceiptStatus
-  reviewer_id?: string
-  reviewer_name?: string
-  reviewed_at?: string
-  rejection_reason?: string
+  reviewer_id?: string | null
+  reviewer_name?: string | null
+  reviewer_email?: string | null
+  reviewed_at?: string | null
+  rejection_reason?: string | null
   created_at: string
+  location?: string | null
+  payment_method?: string | null
+  receipt_time?: string | null
+  reviewed_fields?: Record<string, unknown> | null
+  extracted_fields?: Record<string, unknown> | null
+}
+
+export interface ReviewedFieldUpdates {
+  store?: string | null
+  location?: string | null
+  receipt_date?: string | null
+  receipt_time?: string | null
+  payment_method?: string | null
+  total?: number | null
 }
 
 export interface Campaign {
