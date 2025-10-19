@@ -14,7 +14,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import type { Receipt, ReviewedFieldUpdates, ReceiptStatus } from "@/lib/types"
+import type {
+  Receipt,
+  ReviewedFieldUpdates,
+  ReceiptStatus,
+  ReceiptReview,
+} from "@/lib/types"
 
 interface ReceiptDetailDialogProps {
   receipt: Receipt | null
@@ -25,6 +30,9 @@ interface ReceiptDetailDialogProps {
   onReRunOcr?: (receipt: Receipt) => Promise<void> | void
   actionLoading?: boolean
   reRunLoading?: boolean
+  reviews?: ReceiptReview[]
+  reviewsLoading?: boolean
+  reviewsError?: string | null
 }
 
 interface ReviewActionPayload {
@@ -76,6 +84,15 @@ function formatLongDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+function formatReviewAction(action?: string | null) {
+  if (!action) return "Updated"
+  return action
+    .split("_")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ")
 }
 
 const emptyForm: FormState = {
@@ -156,6 +173,9 @@ export function ReceiptDetailDialog({
   onReRunOcr,
   actionLoading = false,
   reRunLoading = false,
+  reviews = [],
+  reviewsLoading = false,
+  reviewsError = null,
 }: ReceiptDetailDialogProps) {
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [comment, setComment] = useState("")
@@ -429,6 +449,47 @@ export function ReceiptDetailDialog({
                 onChange={(event) => setComment(event.target.value)}
                 rows={4}
               />
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <h3 className="text-sm font-semibold">Review History</h3>
+              {reviewsLoading ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading review history...
+                </p>
+              ) : reviewsError ? (
+                <p className="text-sm text-destructive">{reviewsError}</p>
+              ) : reviews.length > 0 ? (
+                <ul className="space-y-3">
+                  {reviews.map((review, index) => {
+                    const trimmedComment = review.comment?.trim()
+                    return (
+                      <li
+                        key={`${review.created_at}-${index}`}
+                        className="space-y-1 rounded-md border border-border p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {formatReviewAction(review.action)}
+                          </span>
+                          <span>{formatLongDateTime(review.created_at)}</span>
+                        </div>
+                        {review.reviewer?.email && (
+                          <p className="text-xs text-muted-foreground">{review.reviewer.email}</p>
+                        )}
+                        {trimmedComment && (
+                          <p className="text-sm leading-relaxed text-foreground">
+                            {trimmedComment}
+                          </p>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No review history yet.</p>
+              )}
             </div>
 
             {(receipt.status === "pending" || receipt.status === "pending_review") && (

@@ -63,6 +63,15 @@ export interface ReviewedFieldUpdates {
   total?: number | null
 }
 
+export interface ReceiptReview {
+  action: string
+  comment?: string | null
+  created_at: string
+  reviewer?: {
+    email: string | null
+  } | null
+}
+
 export interface Campaign {
   id: string
   brand: string
