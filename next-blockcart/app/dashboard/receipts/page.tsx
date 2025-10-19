@@ -1,18 +1,18 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Search, Filter, Loader2 } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search, Filter, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -20,7 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 import {
   Pagination,
   PaginationContent,
@@ -28,73 +28,71 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination"
-import { ReceiptDetailDialog } from "@/components/receipt-detail-dialog"
+} from "@/components/ui/pagination";
+import { ReceiptDetailDialog } from "@/components/receipt-detail-dialog";
 import type {
   Receipt,
   ReceiptStatus,
   ReviewedFieldUpdates,
   ReceiptAssignmentStatus,
   ReceiptReview,
-} from "@/lib/types"
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth-context"
-import { useToast } from "@/hooks/use-toast"
+} from "@/lib/types";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 10;
 
 interface SupabaseUserRow {
-  id: string
-  email: string | null
-  full_name?: string | null
+  id: string;
+  email: string | null;
 }
 
 interface SupabaseWebUserRow {
-  id: string
-  email: string | null
-  full_name?: string | null
-  role?: string | null
+  id: string;
+  email: string | null;
+  role?: string | null;
 }
 
 interface SupabaseReceiptRow {
-  id: string
-  user_id: string | null
-  image_url: string
-  store: string | null
-  total: number | string | null
-  receipt_date: string | null
-  status: ReceiptStatus
-  created_at: string
-  updated_at?: string | null
-  location?: string | null
-  payment_method?: string | null
-  receipt_time?: string | null
-  reviewed_by?: string | null
-  rejection_reason?: string | null
-  reviewed_fields?: Record<string, unknown> | null
-  extracted_fields?: Record<string, unknown> | null
-  users?: SupabaseUserRow | null
+  id: string;
+  user_id: string | null;
+  image_url: string;
+  store: string | null;
+  total: number | string | null;
+  receipt_date: string | null;
+  status: ReceiptStatus;
+  created_at: string;
+  updated_at?: string | null;
+  location?: string | null;
+  payment_method?: string | null;
+  receipt_time?: string | null;
+  reviewed_by?: string | null;
+  rejection_reason?: string | null;
+  reviewed_fields?: Record<string, unknown> | null;
+  extracted_fields?: Record<string, unknown> | null;
+  users?: SupabaseUserRow | null;
 }
 
 interface SupabaseReceiptAssignmentRow {
-  id: string
-  status: ReceiptAssignmentStatus
-  assigned_at: string
-  completed_at?: string | null
-  released_at?: string | null
-  reviewer_id: string
-  reviewer?: SupabaseWebUserRow | null
-  receipt: SupabaseReceiptRow
+  id: string;
+  status: ReceiptAssignmentStatus;
+  assigned_at: string;
+  completed_at?: string | null;
+  released_at?: string | null;
+  reviewer_id: string;
+  reviewer?: SupabaseWebUserRow | null;
+  receipt: SupabaseReceiptRow;
 }
 
 interface ReviewActionPayload {
-  reviewedFields: ReviewedFieldUpdates
-  comment: string
+  reviewedFields: ReviewedFieldUpdates;
+  comment: string;
 }
 
 interface ReviewerOption {
-  id: string
-  label: string
+  id: string;
+  label: string;
 }
 
 const statusStyles: Record<ReceiptStatus, string> = {
@@ -104,68 +102,83 @@ const statusStyles: Record<ReceiptStatus, string> = {
   rejected: "bg-red-500/10 text-red-600 hover:bg-red-500/20",
   flagged: "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20",
   error: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-}
+};
 
 function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
-  const receipt = row.receipt
+  const receipt = row.receipt;
 
   const totalNumber =
     typeof receipt.total === "number"
       ? Number(receipt.total)
       : receipt.total
       ? Number(receipt.total)
-      : 0
+      : 0;
 
-  const reviewedFields = receipt.reviewed_fields ?? null
-  const extractedFields = receipt.extracted_fields ?? null
+  const reviewedFields = receipt.reviewed_fields ?? null;
+  const extractedFields = receipt.extracted_fields ?? null;
 
   const assignmentReviewerName =
-    row.reviewer?.full_name || row.reviewer?.email || null
+    row.reviewer?.full_name || row.reviewer?.email || null;
 
-  const userEmail = receipt.users?.email || null
-  const userName =
-    receipt.users?.full_name || userEmail || receipt.user_id || "Unknown user"
+  const userEmail = receipt.users?.email || null;
+  const userName = userEmail || receipt.user_id || "Unknown user";
 
-  const purchaseDate = receipt.receipt_date || receipt.created_at
+  const purchaseDate = receipt.receipt_date || receipt.created_at;
   const location =
-    (typeof reviewedFields === "object" && reviewedFields && "location" in reviewedFields
+    (typeof reviewedFields === "object" &&
+    reviewedFields &&
+    "location" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).location
       : undefined) ??
     receipt.location ??
-    (typeof extractedFields === "object" && extractedFields && "location" in extractedFields
+    (typeof extractedFields === "object" &&
+    extractedFields &&
+    "location" in extractedFields
       ? (extractedFields as Record<string, unknown>).location
-      : undefined)
+      : undefined);
 
   const storeName =
-    (typeof reviewedFields === "object" && reviewedFields && "store" in reviewedFields
+    (typeof reviewedFields === "object" &&
+    reviewedFields &&
+    "store" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).store
       : undefined) ??
     receipt.store ??
-    (typeof extractedFields === "object" && extractedFields && "store" in extractedFields
+    (typeof extractedFields === "object" &&
+    extractedFields &&
+    "store" in extractedFields
       ? (extractedFields as Record<string, unknown>).store
-      : undefined)
+      : undefined);
 
   const paymentMethod =
-    (typeof reviewedFields === "object" && reviewedFields && "payment_method" in reviewedFields
+    (typeof reviewedFields === "object" &&
+    reviewedFields &&
+    "payment_method" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).payment_method
       : undefined) ??
     receipt.payment_method ??
-    (typeof extractedFields === "object" && extractedFields && "payment_method" in extractedFields
+    (typeof extractedFields === "object" &&
+    extractedFields &&
+    "payment_method" in extractedFields
       ? (extractedFields as Record<string, unknown>).payment_method
-      : undefined)
+      : undefined);
 
   const receiptTime =
-    (typeof reviewedFields === "object" && reviewedFields && "receipt_time" in reviewedFields
+    (typeof reviewedFields === "object" &&
+    reviewedFields &&
+    "receipt_time" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).receipt_time
       : undefined) ??
     receipt.receipt_time ??
-    (typeof extractedFields === "object" && extractedFields && "receipt_time" in extractedFields
+    (typeof extractedFields === "object" &&
+    extractedFields &&
+    "receipt_time" in extractedFields
       ? (extractedFields as Record<string, unknown>).receipt_time
-      : undefined)
+      : undefined);
 
-  const reviewerEmail = row.reviewer?.email || null
+  const reviewerEmail = row.reviewer?.email || null;
 
-  const reviewerName = assignmentReviewerName
+  const reviewerName = assignmentReviewerName;
 
   return {
     id: receipt.id,
@@ -183,20 +196,23 @@ function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
     reviewed_at: receipt.updated_at ?? null,
     rejection_reason: receipt.rejection_reason ?? null,
     created_at: receipt.created_at,
-    location: typeof location === "string" ? location : receipt.location ?? null,
+    location:
+      typeof location === "string" ? location : receipt.location ?? null,
     payment_method:
       typeof paymentMethod === "string"
         ? paymentMethod
         : receipt.payment_method ?? null,
     receipt_time:
-      typeof receiptTime === "string" ? receiptTime : receipt.receipt_time ?? null,
+      typeof receiptTime === "string"
+        ? receiptTime
+        : receipt.receipt_time ?? null,
     reviewed_fields: reviewedFields,
     extracted_fields: extractedFields,
     assignment_id: row.id,
     assignment_status: row.status,
     assigned_at: row.assigned_at,
     assignment_completed_at: row.completed_at ?? null,
-  }
+  };
 }
 
 function formatCurrency(value: number) {
@@ -204,145 +220,154 @@ function formatCurrency(value: number) {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-  }).format(value || 0)
+  }).format(value || 0);
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "—"
-  const date = new Date(value)
+  if (!value) return "—";
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return value
+    return value;
   }
-  return date.toLocaleDateString()
+  return date.toLocaleDateString();
 }
 
 function formatDateTime(value?: string | null) {
-  if (!value) return "—"
-  const date = new Date(value)
+  if (!value) return "—";
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return value
+    return value;
   }
-  return date.toLocaleString()
+  return date.toLocaleString();
 }
 
 export default function ReceiptsPage() {
-  const supabase = useMemo(() => getSupabaseBrowserClient(), [])
-  const { user, userRole, loading } = useAuth()
-  const { toast } = useToast()
-  const router = useRouter()
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const { user, userRole, loading } = useAuth();
+  const { toast } = useToast();
+  const router = useRouter();
 
-  const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [receiptReviews, setReceiptReviews] = useState<ReceiptReview[] | null>(null)
-  const [reviewsLoading, setReviewsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<ReceiptStatus | "all">("all")
-  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({})
-  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([])
-  const [storeOptions, setStoreOptions] = useState<string[]>([])
-  const [reviewerFilter, setReviewerFilter] = useState<string | "all">("all")
-  const [reviewerFilterInitialized, setReviewerFilterInitialized] = useState(false)
-  const [storeFilter, setStoreFilter] = useState<string | "all">("all")
-  const [isLoading, setIsLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const [reviewActionLoading, setReviewActionLoading] = useState<string | null>(null)
-  const [ocrLoadingId, setOcrLoadingId] = useState<string | null>(null)
-  const [reviewsError, setReviewsError] = useState<string | null>(null)
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [receiptReviews, setReceiptReviews] = useState<ReceiptReview[] | null>(
+    null
+  );
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ReceiptStatus | "all">(
+    "all"
+  );
+  const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>(
+    {}
+  );
+  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([]);
+  const [storeOptions, setStoreOptions] = useState<string[]>([]);
+  const [reviewerFilter, setReviewerFilter] = useState<string | "all">("all");
+  const [reviewerFilterInitialized, setReviewerFilterInitialized] =
+    useState(false);
+  const [storeFilter, setStoreFilter] = useState<string | "all">("all");
+  const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [reviewActionLoading, setReviewActionLoading] = useState<string | null>(
+    null
+  );
+  const [ocrLoadingId, setOcrLoadingId] = useState<string | null>(null);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const pageStart = (page - 1) * PAGE_SIZE + (receipts.length === 0 ? 0 : 1)
-  const pageEnd = (page - 1) * PAGE_SIZE + receipts.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pageStart = (page - 1) * PAGE_SIZE + (receipts.length === 0 ? 0 : 1);
+  const pageEnd = (page - 1) * PAGE_SIZE + receipts.length;
   const paginationSummary = (() => {
-    if (totalCount === 0) return "No receipts to display"
-    if (receipts.length === 0) return "No receipts found for this page"
-    return `Showing ${pageStart}-${pageEnd} of ${totalCount}`
-  })()
+    if (totalCount === 0) return "No receipts to display";
+    if (receipts.length === 0) return "No receipts found for this page";
+    return `Showing ${pageStart}-${pageEnd} of ${totalCount}`;
+  })();
 
   const fetchReceipts = useCallback(async () => {
     if (loading) {
-      return
+      return;
     }
 
     if (!user || userRole !== "reviewer") {
-      setReceipts([])
-      setTotalCount(0)
-      setIsLoading(false)
-      return
+      setReceipts([]);
+      setTotalCount(0);
+      setIsLoading(false);
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
       let query = supabase
         .from("receipt_assignments")
         .select(
-          `id,status,assigned_at,completed_at,released_at,reviewer_id,reviewer:web_user_profiles(id,email,full_name,role),receipt:receipts(
+          `id,status,assigned_at,completed_at,released_at,reviewer_id,reviewer:web_users(id,email,role),receipt:receipts(
             id,user_id,image_url,store,total,receipt_date,status,created_at,updated_at,location,payment_method,receipt_time,reviewed_by,rejection_reason,reviewed_fields,extracted_fields,
-            users:user_id(id,email,full_name)
+            users:user_id(id,email)
           )`,
-          { count: "exact" },
+          { count: "exact" }
         )
         .eq("status", "assigned")
         .is("released_at", null)
         .order("created_at", { referencedTable: "receipts", ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
       const reviewerIdFilter =
-        reviewerFilter === "all" ? null : reviewerFilter ?? null
+        reviewerFilter === "all" ? null : reviewerFilter ?? null;
 
       if (reviewerIdFilter) {
-        query = query.eq("reviewer_id", reviewerIdFilter)
+        query = query.eq("reviewer_id", reviewerIdFilter);
       } else if (!reviewerFilterInitialized && user?.id) {
-        query = query.eq("reviewer_id", user.id)
+        query = query.eq("reviewer_id", user.id);
       }
 
       if (statusFilter !== "all") {
-        query = query.eq("receipts.status", statusFilter)
+        query = query.eq("receipts.status", statusFilter);
       }
 
       if (dateRange.from) {
-        query = query.gte("receipts.receipt_date", dateRange.from)
+        query = query.gte("receipts.receipt_date", dateRange.from);
       }
 
       if (dateRange.to) {
-        query = query.lte("receipts.receipt_date", dateRange.to)
+        query = query.lte("receipts.receipt_date", dateRange.to);
       }
 
       if (storeFilter !== "all") {
-        query = query.eq("receipts.store", storeFilter)
+        query = query.eq("receipts.store", storeFilter);
       }
 
       if (searchQuery.trim()) {
-        const term = `%${searchQuery.trim()}%`
+        const term = `%${searchQuery.trim()}%`;
         query = query.or(
-          `receipts.id.ilike.${term},receipts.store.ilike.${term},receipts.location.ilike.${term},receipts.rejection_reason.ilike.${term}`,
-        )
+          `receipts.id.ilike.${term},receipts.store.ilike.${term},receipts.location.ilike.${term},receipts.rejection_reason.ilike.${term}`
+        );
       }
 
-      const { data, error, count } = await query
+      const { data, error, count } = await query;
 
-      if (error) throw error
+      if (error) throw error;
 
       const mapped = (data ?? []).map((row) =>
-        transformReceiptRow(row as unknown as SupabaseReceiptAssignmentRow),
-      )
+        transformReceiptRow(row as unknown as SupabaseReceiptAssignmentRow)
+      );
 
-      setReceipts(mapped)
-      setTotalCount(count ?? 0)
+      setReceipts(mapped);
+      setTotalCount(count ?? 0);
       setSelectedReceipt((prev) => {
-        if (!prev) return prev
-        return mapped.find((item) => item.id === prev.id) ?? prev
-      })
+        if (!prev) return prev;
+        return mapped.find((item) => item.id === prev.id) ?? prev;
+      });
     } catch (error) {
-      console.error("Failed to load receipts", error)
+      console.error("Failed to load receipts", error);
       toast({
         variant: "destructive",
         title: "Unable to load receipts",
         description: error instanceof Error ? error.message : "Unknown error",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }, [
     dateRange.from,
@@ -358,59 +383,59 @@ export default function ReceiptsPage() {
     toast,
     user?.id,
     userRole,
-  ])
+  ]);
 
   useEffect(() => {
     if (!user?.id || reviewerFilterInitialized) {
-      return
+      return;
     }
 
-    setReviewerFilter(user.id)
-    setReviewerFilterInitialized(true)
-  }, [reviewerFilterInitialized, user?.id])
+    setReviewerFilter(user.id);
+    setReviewerFilterInitialized(true);
+  }, [reviewerFilterInitialized, user?.id]);
 
   useEffect(() => {
     if (loading || reviewerFilterInitialized || user?.id) {
-      return
+      return;
     }
 
-    setReviewerFilterInitialized(true)
-  }, [loading, reviewerFilterInitialized, user?.id])
+    setReviewerFilterInitialized(true);
+  }, [loading, reviewerFilterInitialized, user?.id]);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadReviewerOptions = async () => {
       try {
         const { data, error } = await supabase
-          .from("web_user_profiles")
-          .select("id,email,full_name")
-          .order("full_name", { ascending: true })
+          .from("web_users")
+          .select("id,email")
+          .order("email", { ascending: true });
 
-        if (error) throw error
+        if (error) throw error;
 
-        if (!isMounted) return
+        if (!isMounted) return;
 
         const options = ((data ?? []) as SupabaseWebUserRow[]).map((item) => ({
           id: item.id,
-          label: item.full_name || item.email || item.id,
-        }))
+          label: item.email || item.id,
+        }));
 
-        setReviewerOptions(options)
+        setReviewerOptions(options);
       } catch (error) {
-        console.error("Failed to load reviewer options", error)
+        console.error("Failed to load reviewer options", error);
       }
-    }
+    };
 
-    loadReviewerOptions()
+    loadReviewerOptions();
 
     return () => {
-      isMounted = false
-    }
-  }, [supabase])
+      isMounted = false;
+    };
+  }, [supabase]);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const loadStoreOptions = async () => {
       try {
@@ -418,108 +443,117 @@ export default function ReceiptsPage() {
           .from("receipts")
           .select("store", { distinct: true })
           .not("store", "is", null)
-          .order("store", { ascending: true })
+          .order("store", { ascending: true });
 
-        if (error) throw error
+        if (error) throw error;
 
-        if (!isMounted) return
+        if (!isMounted) return;
 
         const stores = Array.from(
           new Set(
             ((data ?? []) as { store: string | null }[])
               .map((item) => item.store)
-              .filter((store): store is string => typeof store === "string" && store.trim().length > 0),
-          ),
-        )
+              .filter(
+                (store): store is string =>
+                  typeof store === "string" && store.trim().length > 0
+              )
+          )
+        );
 
-        setStoreOptions(stores)
+        setStoreOptions(stores);
       } catch (error) {
-        console.error("Failed to load store options", error)
+        console.error("Failed to load store options", error);
       }
-    }
+    };
 
-    loadStoreOptions()
+    loadStoreOptions();
 
     return () => {
-      isMounted = false
-    }
-  }, [supabase])
+      isMounted = false;
+    };
+  }, [supabase]);
 
   useEffect(() => {
     if (!reviewerFilterInitialized) {
-      return
+      return;
     }
 
-    fetchReceipts()
-  }, [fetchReceipts, reviewerFilterInitialized])
+    fetchReceipts();
+  }, [fetchReceipts, reviewerFilterInitialized]);
 
   useEffect(() => {
     if (loading) {
-      return
+      return;
     }
 
     if (userRole === "admin") {
-      router.replace("/dashboard")
+      router.replace("/dashboard");
     }
-  }, [loading, router, userRole])
+  }, [loading, router, userRole]);
 
   useEffect(() => {
-    const receiptId = selectedReceipt?.id
+    const receiptId = selectedReceipt?.id;
 
     if (!dialogOpen || !receiptId) {
-      setReceiptReviews(null)
-      setReviewsError(null)
-      setReviewsLoading(false)
-      return
+      setReceiptReviews(null);
+      setReviewsError(null);
+      setReviewsLoading(false);
+      return;
     }
 
-    let isActive = true
+    let isActive = true;
 
     const fetchReviews = async () => {
-      setReviewsLoading(true)
-      setReviewsError(null)
+      setReviewsLoading(true);
+      setReviewsError(null);
       const { data, error } = await supabase
         .from("receipt_reviews")
-        .select("action, comment, created_at, reviewer:reviewer_id(email)")
+        .select("action, comment, created_at, reviewer:web_users(email)")
         .eq("receipt_id", receiptId)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (!isActive) return
+      if (!isActive) return;
 
       if (error) {
-        console.error("Failed to fetch receipt reviews", error)
-        setReviewsError("Unable to load review history.")
-        setReceiptReviews([])
+        console.error("Failed to fetch receipt reviews", error);
+        setReviewsError("Unable to load review history.");
+        setReceiptReviews([]);
       } else {
-        setReceiptReviews(data ?? [])
+        setReceiptReviews(data ?? []);
       }
-      setReviewsLoading(false)
-    }
+      setReviewsLoading(false);
+    };
 
-    fetchReviews()
+    fetchReviews();
 
     return () => {
-      isActive = false
-    }
-  }, [dialogOpen, selectedReceipt?.id, supabase])
+      isActive = false;
+    };
+  }, [dialogOpen, selectedReceipt?.id, supabase]);
   const handleReview = useCallback(
-    async (receipt: Receipt, approved: boolean, payload: ReviewActionPayload) => {
+    async (
+      receipt: Receipt,
+      approved: boolean,
+      payload: ReviewActionPayload
+    ) => {
       if (!user || userRole !== "reviewer") {
         toast({
           variant: "destructive",
           title: "You are not allowed to review",
           description: "Only assigned reviewers can process receipts.",
-        })
-        return
+        });
+        return;
       }
 
-      setReviewActionLoading(receipt.id)
-      const previousReceipts = receipts
+      setReviewActionLoading(receipt.id);
+      const previousReceipts = receipts;
 
       const reviewerDisplay =
-        (user.user_metadata as { full_name?: string })?.full_name || user.email || user.id
+        (user.user_metadata as { full_name?: string })?.full_name ||
+        user.email ||
+        user.id;
 
-      const completionTime = new Date().toISOString()
+      const completionTime = new Date().toISOString();
 
       const optimisticReceipt: Receipt = {
         ...receipt,
@@ -532,26 +566,33 @@ export default function ReceiptsPage() {
         reviewed_fields: payload.reviewedFields,
         assignment_status: "completed",
         assignment_completed_at: completionTime,
-      }
+      };
 
-      setReceipts((prev) => prev.map((item) => (item.id === receipt.id ? optimisticReceipt : item)))
-      setSelectedReceipt((prev) => (prev && prev.id === receipt.id ? optimisticReceipt : prev))
+      setReceipts((prev) =>
+        prev.map((item) => (item.id === receipt.id ? optimisticReceipt : item))
+      );
+      setSelectedReceipt((prev) =>
+        prev && prev.id === receipt.id ? optimisticReceipt : prev
+      );
 
       try {
-        const { data, error } = await supabase.functions.invoke("review-handler", {
-          body: {
-            receipt_id: receipt.id,
-            reviewer_id: user.id,
-            approved,
-            reviewed_fields: payload.reviewedFields,
-            comment: payload.comment,
-            user_id: receipt.user_id,
-          },
-        })
+        const { data, error } = await supabase.functions.invoke(
+          "review-handler",
+          {
+            body: {
+              receipt_id: receipt.id,
+              reviewer_id: user.id,
+              approved,
+              reviewed_fields: payload.reviewedFields,
+              comment: payload.comment,
+              user_id: receipt.user_id,
+            },
+          }
+        );
 
-        if (error) throw error
+        if (error) throw error;
         if (!data?.success) {
-          throw new Error("Unexpected response from review handler")
+          throw new Error("Unexpected response from review handler");
         }
 
         toast({
@@ -559,47 +600,53 @@ export default function ReceiptsPage() {
           description: approved
             ? "The receipt has been marked as approved."
             : "The receipt has been rejected.",
-        })
+        });
 
-        await fetchReceipts()
-        setDialogOpen(false)
-        setSelectedReceipt(null)
+        await fetchReceipts();
+        setDialogOpen(false);
+        setSelectedReceipt(null);
       } catch (error) {
-        console.error("Failed to submit review", error)
-        setReceipts(previousReceipts)
-        setSelectedReceipt(receipt)
+        console.error("Failed to submit review", error);
+        setReceipts(previousReceipts);
+        setSelectedReceipt(receipt);
         toast({
           variant: "destructive",
           title: "Review failed",
           description: error instanceof Error ? error.message : "Unknown error",
-        })
+        });
       } finally {
-        setReviewActionLoading(null)
+        setReviewActionLoading(null);
       }
     },
-    [fetchReceipts, receipts, supabase, toast, user],
-  )
+    [fetchReceipts, receipts, supabase, toast, user]
+  );
 
   const handleApprove = useCallback(
-    (receipt: Receipt, payload: ReviewActionPayload) => handleReview(receipt, true, payload),
-    [handleReview],
-  )
+    (receipt: Receipt, payload: ReviewActionPayload) =>
+      handleReview(receipt, true, payload),
+    [handleReview]
+  );
 
   const handleReject = useCallback(
-    (receipt: Receipt, payload: ReviewActionPayload) => handleReview(receipt, false, payload),
-    [handleReview],
-  )
+    (receipt: Receipt, payload: ReviewActionPayload) =>
+      handleReview(receipt, false, payload),
+    [handleReview]
+  );
 
   const handleReRunOcr = useCallback(
     async (receipt: Receipt) => {
-      setOcrLoadingId(receipt.id)
-      const previousReceipts = receipts
+      setOcrLoadingId(receipt.id);
+      const previousReceipts = receipts;
       const optimistic: Receipt = {
         ...receipt,
         status: "pending_review",
-      }
-      setReceipts((prev) => prev.map((item) => (item.id === receipt.id ? optimistic : item)))
-      setSelectedReceipt((prev) => (prev && prev.id === receipt.id ? optimistic : prev))
+      };
+      setReceipts((prev) =>
+        prev.map((item) => (item.id === receipt.id ? optimistic : item))
+      );
+      setSelectedReceipt((prev) =>
+        prev && prev.id === receipt.id ? optimistic : prev
+      );
 
       try {
         const { data, error } = await supabase.functions.invoke("ocr-parser", {
@@ -607,41 +654,41 @@ export default function ReceiptsPage() {
             receipt_id: receipt.id,
             image_url: receipt.image_url,
           },
-        })
+        });
 
-        if (error) throw error
+        if (error) throw error;
         if (!data?.success) {
-          throw new Error("OCR function returned an unexpected response")
+          throw new Error("OCR function returned an unexpected response");
         }
 
         toast({
           title: "OCR re-run started",
           description: "We will update the receipt once new data is available.",
-        })
+        });
 
-        await fetchReceipts()
+        await fetchReceipts();
       } catch (error) {
-        console.error("Failed to re-run OCR", error)
-        setReceipts(previousReceipts)
-        setSelectedReceipt(receipt)
+        console.error("Failed to re-run OCR", error);
+        setReceipts(previousReceipts);
+        setSelectedReceipt(receipt);
         toast({
           variant: "destructive",
           title: "Unable to re-run OCR",
           description: error instanceof Error ? error.message : "Unknown error",
-        })
+        });
       } finally {
-        setOcrLoadingId(null)
+        setOcrLoadingId(null);
       }
     },
-    [fetchReceipts, receipts, supabase, toast],
-  )
+    [fetchReceipts, receipts, supabase, toast]
+  );
 
   const handleDialogOpenChange = (open: boolean) => {
-    setDialogOpen(open)
+    setDialogOpen(open);
     if (!open) {
-      setSelectedReceipt(null)
+      setSelectedReceipt(null);
     }
-  }
+  };
 
   const statusOptions: { label: string; value: ReceiptStatus | "all" }[] = [
     { label: "All Status", value: "all" },
@@ -651,23 +698,26 @@ export default function ReceiptsPage() {
     { label: "Rejected", value: "rejected" },
     { label: "Flagged", value: "flagged" },
     { label: "Error", value: "error" },
-  ]
+  ];
 
   const reviewerSelectOptions = useMemo(
     () => [
       { label: "All Reviewers", value: "all" as const },
-      ...reviewerOptions.map((option) => ({ label: option.label, value: option.id })),
+      ...reviewerOptions.map((option) => ({
+        label: option.label,
+        value: option.id,
+      })),
     ],
-    [reviewerOptions],
-  )
+    [reviewerOptions]
+  );
 
   const storeSelectOptions = useMemo(
     () => [
       { label: "All Stores", value: "all" as const },
       ...storeOptions.map((store) => ({ label: store, value: store })),
     ],
-    [storeOptions],
-  )
+    [storeOptions]
+  );
 
   return (
     <div className="space-y-6">
@@ -685,8 +735,8 @@ export default function ReceiptsPage() {
             placeholder="Search by store, ID, or location..."
             value={searchQuery}
             onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setPage(1)
+              setSearchQuery(e.target.value);
+              setPage(1);
             }}
             className="pl-9"
           />
@@ -695,8 +745,8 @@ export default function ReceiptsPage() {
         <Select
           value={statusFilter}
           onValueChange={(value) => {
-            setStatusFilter(value as ReceiptStatus | "all")
-            setPage(1)
+            setStatusFilter(value as ReceiptStatus | "all");
+            setPage(1);
           }}
         >
           <SelectTrigger className="w-full">
@@ -715,8 +765,8 @@ export default function ReceiptsPage() {
         <Select
           value={reviewerFilter}
           onValueChange={(value) => {
-            setReviewerFilter(value as string | "all")
-            setPage(1)
+            setReviewerFilter(value as string | "all");
+            setPage(1);
           }}
         >
           <SelectTrigger className="w-full">
@@ -734,8 +784,8 @@ export default function ReceiptsPage() {
         <Select
           value={storeFilter}
           onValueChange={(value) => {
-            setStoreFilter(value as string | "all")
-            setPage(1)
+            setStoreFilter(value as string | "all");
+            setPage(1);
           }}
         >
           <SelectTrigger className="w-full">
@@ -756,9 +806,9 @@ export default function ReceiptsPage() {
               type="date"
               value={dateRange.from ?? ""}
               onChange={(event) => {
-                const value = event.target.value || undefined
-                setDateRange((prev) => ({ ...prev, from: value }))
-                setPage(1)
+                const value = event.target.value || undefined;
+                setDateRange((prev) => ({ ...prev, from: value }));
+                setPage(1);
               }}
               placeholder="From"
             />
@@ -766,9 +816,9 @@ export default function ReceiptsPage() {
               type="date"
               value={dateRange.to ?? ""}
               onChange={(event) => {
-                const value = event.target.value || undefined
-                setDateRange((prev) => ({ ...prev, to: value }))
-                setPage(1)
+                const value = event.target.value || undefined;
+                setDateRange((prev) => ({ ...prev, to: value }));
+                setPage(1);
               }}
               placeholder="To"
             />
@@ -778,8 +828,8 @@ export default function ReceiptsPage() {
               variant="ghost"
               className="justify-start px-2 text-sm"
               onClick={() => {
-                setDateRange({})
-                setPage(1)
+                setDateRange({});
+                setPage(1);
               }}
             >
               Clear date range
@@ -807,7 +857,10 @@ export default function ReceiptsPage() {
           <TableBody>
             {isLoading || loading ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={10}
+                  className="h-32 text-center text-muted-foreground"
+                >
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading receipts...
@@ -816,7 +869,10 @@ export default function ReceiptsPage() {
               </TableRow>
             ) : receipts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={10}
+                  className="h-32 text-center text-muted-foreground"
+                >
                   No receipts found
                 </TableCell>
               </TableRow>
@@ -826,14 +882,18 @@ export default function ReceiptsPage() {
                   key={receipt.id}
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => {
-                    setSelectedReceipt(receipt)
-                    setDialogOpen(true)
+                    setSelectedReceipt(receipt);
+                    setDialogOpen(true);
                   }}
                 >
-                  <TableCell className="font-mono text-xs">{receipt.id}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {receipt.id}
+                  </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{receipt.user_name ?? "Unknown"}</p>
+                      <p className="font-medium">
+                        {receipt.user_name ?? "Unknown"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {receipt.user_email ?? "No email"}
                       </p>
@@ -846,7 +906,10 @@ export default function ReceiptsPage() {
                   </TableCell>
                   <TableCell>{formatDate(receipt.purchase_date)}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={statusStyles[receipt.status]}>
+                    <Badge
+                      variant="secondary"
+                      className={statusStyles[receipt.status]}
+                    >
                       {receipt.status.replace("_", " ")}
                     </Badge>
                   </TableCell>
@@ -861,9 +924,9 @@ export default function ReceiptsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={(event) => {
-                        event.stopPropagation()
-                        setSelectedReceipt(receipt)
-                        setDialogOpen(true)
+                        event.stopPropagation();
+                        setSelectedReceipt(receipt);
+                        setDialogOpen(true);
                       }}
                     >
                       View Details
@@ -882,14 +945,22 @@ export default function ReceiptsPage() {
           <PaginationContent>
             <PaginationPrevious
               onClick={() => page > 1 && setPage((current) => current - 1)}
-              className={page === 1 ? "pointer-events-none opacity-50" : undefined}
+              className={
+                page === 1 ? "pointer-events-none opacity-50" : undefined
+              }
             />
             <PaginationItem>
               <PaginationLink isActive>{page}</PaginationLink>
             </PaginationItem>
             <PaginationNext
-              onClick={() => page < totalPages && setPage((current) => current + 1)}
-              className={page >= totalPages ? "pointer-events-none opacity-50" : undefined}
+              onClick={() =>
+                page < totalPages && setPage((current) => current + 1)
+              }
+              className={
+                page >= totalPages
+                  ? "pointer-events-none opacity-50"
+                  : undefined
+              }
             />
           </PaginationContent>
         </Pagination>
@@ -911,5 +982,5 @@ export default function ReceiptsPage() {
         reviewsError={reviewsError}
       />
     </div>
-  )
+  );
 }

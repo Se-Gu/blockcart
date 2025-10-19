@@ -61,7 +61,7 @@ export async function getUserRole(userId: string): Promise<UserRole | null> {
     // Add timeout to prevent hanging
     const queryPromise = supabase
       .from("web_users")
-      .select("role")
+      .select("role, email")
       .eq("id", userId)
       .maybeSingle();
 

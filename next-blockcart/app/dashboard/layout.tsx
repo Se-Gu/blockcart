@@ -72,8 +72,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // If userRole is null, redirect to login (user not in web_users table)
-  if (userRole === null) {
+  // If userRole is null and user is authenticated, don't redirect yet
+  // The role might still be loading or there might be a temporary error
+  if (userRole === null && user) {
+    return null;
+  }
+
+  // If userRole is null and user is not authenticated, redirect to login
+  if (userRole === null && !user) {
     router.replace("/login");
     return null;
   }

@@ -45,11 +45,14 @@ group by
 create view public.web_user_profiles as
 select
   wu.id,
+  wu.email,
   wu.role,
   wu.created_at,
   wu.updated_at,
-  au.email,
-  coalesce(au.raw_user_meta_data ->> 'full_name'::text, au.email) as full_name,
+  COALESCE(
+    au.raw_user_meta_data ->> 'full_name'::text,
+    wu.email
+  ) as full_name,
   au.last_sign_in_at as last_login,
   au.invited_at,
   au.email_confirmed_at

@@ -315,7 +315,7 @@ export async function fetchRecentReceipts(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("receipts")
     .select(
-      "id, user_id, image_url, total, store, receipt_date, status, created_at, reviewed_by, rejection_reason, reward_amount, users:users!receipts_user_id_fkey(email, wallet_address), reviewer:users!receipts_reviewed_by_fkey(email)"
+      "id, user_id, image_url, total, store, receipt_date, status, created_at, reviewed_by, rejection_reason, reward_amount, users:users!receipts_user_id_fkey(email, wallet_address), reviewer:web_users!receipts_reviewed_by_fkey(email, role)"
     )
     .order("created_at", { ascending: false })
     .limit(5);

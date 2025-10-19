@@ -76,7 +76,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect to dashboard if authenticated and on login page
-  if (user && request.nextUrl.pathname.startsWith("/login")) {
+  if (user && request.nextUrl.pathname === "/login") {
     console.log(
       "User authenticated and in web_users, redirecting to dashboard"
     );
