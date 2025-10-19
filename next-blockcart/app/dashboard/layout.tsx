@@ -53,7 +53,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  const userRole = (user ? deriveUserRoleFromMetadata(user) : "admin") as UserRole;
   if (!userRole) {
     return null;
   }
@@ -71,7 +70,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const userName =
     (typeof userMetadata.full_name === "string" && userMetadata.full_name) ||
     (typeof userMetadata.name === "string" && userMetadata.name) ||
-    (typeof userMetadata.display_name === "string" && userMetadata.display_name) ||
+    (typeof userMetadata.display_name === "string" &&
+      userMetadata.display_name) ||
     userEmail;
 
   return (
