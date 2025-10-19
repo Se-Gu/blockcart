@@ -80,6 +80,25 @@ export async function fetchReceiptStats(
   };
 }
 
+export async function fetchActiveCampaignCount(
+  supabase: SupabaseClient
+): Promise<number> {
+  const now = new Date().toISOString();
+
+  const { count, error } = (await supabase
+    .from("campaigns")
+    .select("id", { count: "exact", head: true })
+    .lte("start_date", now)
+    .or(`end_date.is.null,end_date.gte.${now}`)) as CountResult;
+
+  if (error) {
+    console.error("Failed to fetch active campaign count", error);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 export async function fetchRewardStats(
   supabase: SupabaseClient
 ): Promise<RewardStats> {
