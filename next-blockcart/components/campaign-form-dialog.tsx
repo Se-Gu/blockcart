@@ -8,69 +8,98 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Campaign } from "@/lib/types"
 
 interface CampaignFormDialogProps {
   campaign: Campaign | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave?: (campaign: Partial<Campaign>) => void
+  onSave?: (campaign: Partial<Campaign>) => Promise<void> | void
+}
+
+function normalizeDateInput(value: string | null | undefined): string {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value.split("T")[0] ?? ""
+  }
+  return date.toISOString().slice(0, 10)
 }
 
 export function CampaignFormDialog({ campaign, open, onOpenChange, onSave }: CampaignFormDialogProps) {
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
+    brand: "",
+    multiplier: "1",
     start_date: "",
     end_date: "",
-    reward_amount: "",
-    max_participants: "",
-    status: "active" as Campaign["status"],
+    ruleJsonText: "{}",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [ruleJsonError, setRuleJsonError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (campaign) {
+    if (campaign && open) {
       setFormData({
-        name: campaign.name,
-        description: campaign.description,
-        start_date: campaign.start_date,
-        end_date: campaign.end_date,
-        reward_amount: campaign.reward_amount.toString(),
-        max_participants: campaign.max_participants?.toString() || "",
-        status: campaign.status,
+        brand: campaign.brand ?? "",
+        multiplier: campaign.multiplier != null ? String(campaign.multiplier) : "1",
+        start_date: normalizeDateInput(campaign.start_date),
+        end_date: normalizeDateInput(campaign.end_date),
+        ruleJsonText: campaign.rule_json ? JSON.stringify(campaign.rule_json, null, 2) : "{}",
       })
-    } else {
+    } else if (open) {
       setFormData({
-        name: "",
-        description: "",
+        brand: "",
+        multiplier: "1",
         start_date: "",
         end_date: "",
-        reward_amount: "",
-        max_participants: "",
-        status: "active",
+        ruleJsonText: "{}",
       })
     }
+    setRuleJsonError(null)
   }, [campaign, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    const campaignData: Partial<Campaign> = {
-      ...formData,
-      reward_amount: Number.parseFloat(formData.reward_amount),
-      max_participants: formData.max_participants ? Number.parseInt(formData.max_participants) : undefined,
+    let parsedRuleJson: Record<string, unknown> | null = null
+    const trimmedRule = formData.ruleJsonText.trim()
+
+    if (trimmedRule.length > 0) {
+      try {
+        parsedRuleJson = JSON.parse(trimmedRule)
+        setRuleJsonError(null)
+      } catch (error) {
+        setRuleJsonError((error as Error).message)
+        setIsSubmitting(false)
+        return
+      }
     }
 
-    if (campaign) {
+    const multiplierValue = Number.parseFloat(formData.multiplier)
+    const normalizedMultiplier = Number.isFinite(multiplierValue) ? multiplierValue : 1
+
+    const campaignData: Partial<Campaign> = {
+      brand: formData.brand.trim(),
+      multiplier: normalizedMultiplier,
+      rule_json: parsedRuleJson,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
+    }
+
+    if (campaign?.id) {
       campaignData.id = campaign.id
     }
 
-    await onSave?.(campaignData)
-    setIsSubmitting(false)
-    onOpenChange(false)
+    try {
+      await onSave?.(campaignData)
+      onOpenChange(false)
+    } catch (error) {
+      console.error("Failed to save campaign", error)
+      return
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -82,29 +111,31 @@ export function CampaignFormDialog({ campaign, open, onOpenChange, onSave }: Cam
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Campaign Name</Label>
+            <Label htmlFor="brand">Brand</Label>
             <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Summer Grocery Rewards"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Earn rewards on all grocery purchases this summer"
-              rows={3}
+              id="brand"
+              value={formData.brand}
+              onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+              placeholder="Blockcart Fresh"
               required
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="multiplier">Multiplier</Label>
+              <Input
+                id="multiplier"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.multiplier}
+                onChange={(e) => setFormData({ ...formData, multiplier: e.target.value })}
+                placeholder="1.00"
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="start_date">Start Date</Label>
               <Input
@@ -112,10 +143,11 @@ export function CampaignFormDialog({ campaign, open, onOpenChange, onSave }: Cam
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                required
               />
             </div>
+          </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="end_date">End Date</Label>
               <Input
@@ -123,54 +155,29 @@ export function CampaignFormDialog({ campaign, open, onOpenChange, onSave }: Cam
                 type="date"
                 value={formData.end_date}
                 onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="reward_amount">Reward Amount ($)</Label>
-              <Input
-                id="reward_amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.reward_amount}
-                onChange={(e) => setFormData({ ...formData, reward_amount: e.target.value })}
-                placeholder="10.00"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="max_participants">Max Participants (Optional)</Label>
-              <Input
-                id="max_participants"
-                type="number"
-                min="1"
-                value={formData.max_participants}
-                onChange={(e) => setFormData({ ...formData, max_participants: e.target.value })}
-                placeholder="Leave empty for unlimited"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value as Campaign["status"] })}
-            >
-              <SelectTrigger id="status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="rule_json">Campaign Rules (JSON)</Label>
+            <Textarea
+              id="rule_json"
+              value={formData.ruleJsonText}
+              onChange={(e) => {
+                setFormData({ ...formData, ruleJsonText: e.target.value })
+                if (ruleJsonError) {
+                  setRuleJsonError(null)
+                }
+              }}
+              spellCheck={false}
+              className="font-mono text-sm"
+              rows={12}
+            />
+            <p className="text-xs text-muted-foreground">
+              Provide structured configuration used by the receipt validator (e.g. reward limits, qualifiers).
+            </p>
+            {ruleJsonError ? <p className="text-xs text-destructive">Invalid JSON: {ruleJsonError}</p> : null}
           </div>
 
           <div className="flex gap-2 pt-4">

@@ -56,15 +56,20 @@ export interface ReviewedFieldUpdates {
 
 export interface Campaign {
   id: string
-  name: string
-  description: string
-  start_date: string
-  end_date: string
-  reward_amount: number
-  max_participants?: number
-  current_participants: number
-  status: "active" | "inactive" | "completed"
-  created_at: string
+  brand: string
+  multiplier: number
+  rule_json: Record<string, unknown> | null
+  start_date: string | null
+  end_date: string | null
+  updated_at: string | null
+  version?: number | null
+  name?: string | null
+  description?: string | null
+  reward_amount?: number | null
+  max_participants?: number | null
+  current_participants?: number | null
+  status?: "active" | "inactive" | "completed"
+  created_at?: string | null
 }
 
 export interface Reward {
