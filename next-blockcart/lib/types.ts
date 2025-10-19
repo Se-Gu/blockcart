@@ -5,10 +5,15 @@ export type ReceiptStatus = "pending" | "approved" | "rejected"
 export interface User {
   id: string
   email: string
-  full_name: string
+  full_name: string | null
   role: UserRole
   created_at: string
-  last_login?: string
+  last_login?: string | null
+  wallet_address?: string | null
+  referral_code?: string | null
+  total_rewards?: number
+  referral_count?: number
+  lifetime_tokens?: number
 }
 
 export interface Receipt {
