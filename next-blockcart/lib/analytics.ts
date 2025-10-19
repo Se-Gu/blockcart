@@ -37,57 +37,15 @@ export interface AnalyticsDashboardData {
 
 const FALLBACK_ANALYTICS: AnalyticsDashboardData = {
   overview: {
-    totalReceipts: 1487,
-    approvalRate: 0.81,
-    avgProcessingTimeHours: 5.4,
-    rewardsIssued: 61234,
-    pendingReceipts: 32,
+    totalReceipts: 0,
+    approvalRate: 0,
+    avgProcessingTimeHours: 0,
+    rewardsIssued: 0,
+    pendingReceipts: 0,
   },
-  receiptTrends: [
-    { date: "Jan 10", submitted: 120, approved: 95, rejected: 8 },
-    { date: "Jan 11", submitted: 132, approved: 102, rejected: 10 },
-    { date: "Jan 12", submitted: 126, approved: 99, rejected: 9 },
-    { date: "Jan 13", submitted: 118, approved: 96, rejected: 7 },
-    { date: "Jan 14", submitted: 140, approved: 110, rejected: 11 },
-    { date: "Jan 15", submitted: 153, approved: 121, rejected: 12 },
-    { date: "Jan 16", submitted: 147, approved: 118, rejected: 9 },
-  ],
-  rewardBreakdown: [
-    { label: "Groceries", value: 18234 },
-    { label: "Dining", value: 14210 },
-    { label: "Electronics", value: 10112 },
-    { label: "Home", value: 8765 },
-  ],
-  reviewerPerformance: [
-    {
-      id: "rev-1",
-      reviewer: "Alex Johnson",
-      reviewed: 312,
-      approvalRate: 0.84,
-      avgReviewTimeMinutes: 8.2,
-    },
-    {
-      id: "rev-2",
-      reviewer: "Maria Chen",
-      reviewed: 287,
-      approvalRate: 0.79,
-      avgReviewTimeMinutes: 9.1,
-    },
-    {
-      id: "rev-3",
-      reviewer: "Samuel Green",
-      reviewed: 265,
-      approvalRate: 0.88,
-      avgReviewTimeMinutes: 7.5,
-    },
-    {
-      id: "rev-4",
-      reviewer: "Priya Patel",
-      reviewed: 241,
-      approvalRate: 0.82,
-      avgReviewTimeMinutes: 8.9,
-    },
-  ],
+  receiptTrends: [],
+  rewardBreakdown: [],
+  reviewerPerformance: [],
 }
 
 function parseNumber(value: unknown, fallback: number): number {
@@ -152,7 +110,7 @@ function normalizeAnalyticsPayload(payload: any): AnalyticsDashboardData | null 
     ),
   }
 
-  const receiptTrends: ReceiptTrendPoint[] = parseArray(trendsPayload, FALLBACK_ANALYTICS.receiptTrends).map(
+  const receiptTrends: ReceiptTrendPoint[] = parseArray(trendsPayload, []).map(
     (entry: any) => ({
       date: String(entry.date ?? entry.day ?? entry.label ?? ""),
       submitted: parseNumber(entry.submitted ?? entry.total ?? entry.count, 0),
@@ -161,38 +119,29 @@ function normalizeAnalyticsPayload(payload: any): AnalyticsDashboardData | null 
     }),
   )
 
-  const rewardBreakdown: RewardBreakdownItem[] = parseArray(
-    rewardsPayload,
-    FALLBACK_ANALYTICS.rewardBreakdown,
-  ).map((entry: any) => ({
+  const rewardBreakdown: RewardBreakdownItem[] = parseArray(rewardsPayload, []).map((entry: any) => ({
     label: String(entry.label ?? entry.category ?? entry.segment ?? "Unknown"),
     value: parseNumber(entry.value ?? entry.total ?? entry.amount, 0),
   }))
 
-  const reviewerPerformance: ReviewerPerformanceRow[] = parseArray(
-    reviewersPayload,
-    FALLBACK_ANALYTICS.reviewerPerformance,
-  ).map((entry: any, index) => ({
+  const reviewerPerformance: ReviewerPerformanceRow[] = parseArray(reviewersPayload, []).map((entry: any, index) => ({
     id: String(entry.id ?? entry.reviewer_id ?? `reviewer-${index}`),
     reviewer: String(entry.reviewer ?? entry.name ?? entry.display_name ?? "Reviewer"),
     reviewed: parseNumber(entry.reviewed ?? entry.total ?? entry.count, 0),
     approvalRate:
       parseNumber(entry.approvalRate ?? entry.approval_rate ?? entry.acceptanceRate, 0) ||
-      FALLBACK_ANALYTICS.reviewerPerformance[index]?.approvalRate ||
       0,
     avgReviewTimeMinutes: parseNumber(
       entry.avgReviewTimeMinutes ?? entry.averageReviewTime ?? entry.avg_review_time_minutes,
-      FALLBACK_ANALYTICS.reviewerPerformance[index]?.avgReviewTimeMinutes || 0,
+      0,
     ),
   }))
 
   return {
     overview,
-    receiptTrends: receiptTrends.length ? receiptTrends : FALLBACK_ANALYTICS.receiptTrends,
-    rewardBreakdown: rewardBreakdown.length ? rewardBreakdown : FALLBACK_ANALYTICS.rewardBreakdown,
-    reviewerPerformance: reviewerPerformance.length
-      ? reviewerPerformance
-      : FALLBACK_ANALYTICS.reviewerPerformance,
+    receiptTrends,
+    rewardBreakdown,
+    reviewerPerformance,
   }
 }
 
@@ -240,15 +189,15 @@ async function fetchFromSupabase(): Promise<AnalyticsDashboardData | null> {
 }
 
 export async function loadAnalyticsDashboard(): Promise<AnalyticsDashboardData> {
-  const aggregatorData = await fetchFromAggregator()
-  if (aggregatorData) {
-    return aggregatorData
-  }
-
   const supabaseData = await fetchFromSupabase()
   if (supabaseData) {
     return supabaseData
   }
 
-  return FALLBACK_ANALYTICS
+  const aggregatorData = await fetchFromAggregator()
+  if (aggregatorData) {
+    return aggregatorData
+  }
+
+  throw new Error("Analytics service is unavailable")
 }

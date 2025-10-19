@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Bar,
   BarChart,
@@ -110,6 +110,7 @@ export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const lastSuccessfulDataRef = useRef<AnalyticsDashboardData | null>(null)
 
   useEffect(() => {
     if (!isAdmin || guardLoading) {
@@ -124,12 +125,21 @@ export default function AnalyticsPage() {
         const data = await loadAnalyticsDashboard()
         if (isMounted) {
           setAnalytics(data)
+          lastSuccessfulDataRef.current = data
           setError(null)
         }
       } catch (err) {
         console.error("Failed to load analytics dashboard", err)
         if (isMounted) {
-          setError("Unable to load analytics data. Showing the last known snapshot.")
+          const hasSnapshot = Boolean(lastSuccessfulDataRef.current)
+          setError(
+            hasSnapshot
+              ? "Unable to refresh analytics data. Showing the last known snapshot."
+              : "Unable to load analytics data from the live service."
+          )
+          if (!hasSnapshot) {
+            setAnalytics(null)
+          }
         }
       } finally {
         if (isMounted) {
@@ -208,9 +218,9 @@ export default function AnalyticsPage() {
         </Alert>
       )}
 
-      {loading || !analytics ? (
+      {loading ? (
         <AnalyticsSkeleton />
-      ) : (
+      ) : analytics ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {metrics.map((metric) => (
@@ -328,6 +338,19 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
         </>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Analytics unavailable</CardTitle>
+            <CardDescription>
+              We couldn&apos;t reach the analytics service. Please try again later.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            If the issue persists, verify the Supabase edge function deployment named{" "}
+            <code className="mx-1 rounded bg-muted px-1 py-0.5">analytics-dashboard</code> is active.
+          </CardContent>
+        </Card>
       )}
     </div>
   )
