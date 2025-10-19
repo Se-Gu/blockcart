@@ -30,18 +30,16 @@ export default function UsersPage() {
       const supabase = getSupabaseBrowserClient()
 
       try {
-        const [profilesResponse, rewardsResponse, referralsResponse] = await Promise.all([
+        const [usersResponse, rewardsResponse, referralsResponse] = await Promise.all([
           supabase
-            .from("profiles")
-            .select(
-              "id, email, full_name, first_name, last_name, role, created_at, last_login, last_sign_in_at, wallet_address, wallet, referral_code"
-            ),
+            .from("users")
+            .select("id, email, wallet_address, referral_code, created_at, updated_at"),
           supabase.from("rewards").select("user_id, amount"),
-          supabase.from("referrals").select("referrer, referrer_id, bonus, reward_amount"),
+          supabase.from("referrals").select("referrer, bonus"),
         ])
 
-        if (profilesResponse.error) {
-          throw profilesResponse.error
+        if (usersResponse.error) {
+          throw usersResponse.error
         }
 
         if (rewardsResponse.error) {
@@ -62,15 +60,12 @@ export default function UsersPage() {
 
         const referralStats = new Map<string, { count: number; bonus: number }>()
         referralsResponse.data?.forEach((referral) => {
-          const referrerId = (referral as { referrer_id?: string | null }).referrer_id ??
-            (referral as { referrer?: string | null }).referrer ??
-            null
+          const referrerId = (referral as { referrer?: string | null }).referrer ?? null
 
           if (!referrerId) return
 
           const rawBonus =
-            (referral as { bonus?: number | null }).bonus ??
-            (referral as { reward_amount?: number | null }).reward_amount ??
+            (referral as { bonus?: number | string | null }).bonus ??
             0
 
           const bonus = typeof rawBonus === "number" ? rawBonus : Number(rawBonus)
@@ -82,47 +77,20 @@ export default function UsersPage() {
           referralStats.set(referrerId, stats)
         })
 
-        const profiles = profilesResponse.data ?? []
-        const nextUsers: User[] = profiles.map((profile) => {
-          const fullNameCandidates = [
-            (profile as { full_name?: string | null }).full_name,
-            [
-              (profile as { first_name?: string | null }).first_name,
-              (profile as { last_name?: string | null }).last_name,
-            ]
-              .filter(Boolean)
-              .join(" ") || null,
-          ].filter((value) => value && String(value).trim().length > 0)
-
-          const fullName = (fullNameCandidates[0] as string | null) ?? null
-
-          const rawRole = (profile as { role?: string | null }).role ?? undefined
-          const role: UserRole = ["admin", "reviewer"].includes((rawRole ?? "").toLowerCase())
-            ? ((rawRole ?? "reviewer") as UserRole)
-            : "reviewer"
-
+        const userRows = usersResponse.data ?? []
+        const nextUsers: User[] = userRows.map((profile) => {
           const rewardTotal = rewardTotals.get(profile.id) ?? 0
           const referral = referralStats.get(profile.id)
           const lifetimeTokens = rewardTotal + (referral?.bonus ?? 0)
 
-          const walletAddress =
-            (profile as { wallet_address?: string | null }).wallet_address ??
-            (profile as { wallet?: string | null }).wallet ??
-            null
-
-          const lastLogin =
-            (profile as { last_login?: string | null }).last_login ??
-            (profile as { last_sign_in_at?: string | null }).last_sign_in_at ??
-            null
-
           return {
             id: profile.id,
             email: profile.email,
-            full_name: fullName,
-            role,
+            full_name: null,
+            role: "reviewer",
             created_at: profile.created_at,
-            last_login: lastLogin,
-            wallet_address: walletAddress,
+            last_login: profile.updated_at ?? null,
+            wallet_address: profile.wallet_address ?? null,
             referral_code: (profile as { referral_code?: string | null }).referral_code ?? null,
             total_rewards: rewardTotal,
             referral_count: referral?.count ?? 0,
@@ -163,17 +131,8 @@ export default function UsersPage() {
   }, [dialogOpen])
 
   const handleUpdateRole = async (userId: string, role: UserRole) => {
-    const previousUsers = users
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
-
-    const supabase = getSupabaseBrowserClient()
-
-    const { error: updateError } = await supabase.from("profiles").update({ role }).eq("id", userId)
-
-    if (updateError) {
-      setUsers(previousUsers)
-      throw updateError
-    }
+    setUsers((prev) => prev)
+    throw new Error("Role management is not supported with the current Supabase schema")
   }
 
   const filteredUsers = users.filter((user) => {
