@@ -1,5 +1,15 @@
-import { Receipt, Users, CheckCircle, XCircle, DollarSign, UserCheck, Trophy } from "lucide-react"
+import {
+  Receipt,
+  Users,
+  CheckCircle,
+  XCircle,
+  DollarSign,
+  UserCheck,
+  Trophy,
+  Megaphone,
+} from "lucide-react"
 import { StatCard } from "@/components/stat-card"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { UserRole } from "@/lib/types"
 import { getSupabaseServerClient } from "@/lib/supabase/server"
@@ -10,8 +20,10 @@ import {
   fetchReferralBonusTotal,
   fetchActiveUsers,
   fetchTotalUsers,
+  fetchActiveCampaignCount,
 } from "@/lib/supabase/dashboard"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 interface StatsSectionProps {
   role: UserRole
@@ -28,11 +40,12 @@ function formatCurrency(amount: number) {
 export async function StatsSection({ role }: StatsSectionProps) {
   const supabase = await getSupabaseServerClient()
 
-  const [receiptStats, rewardStats, activeUsers, topCampaigns] = await Promise.all([
+  const [receiptStats, rewardStats, activeUsers, topCampaigns, activeCampaigns] = await Promise.all([
     fetchReceiptStats(supabase),
     fetchRewardStats(supabase),
     fetchActiveUsers(supabase),
     fetchTopCampaigns(supabase),
+    fetchActiveCampaignCount(supabase),
   ])
 
   let totalUsers = 0
@@ -57,7 +70,7 @@ export async function StatsSection({ role }: StatsSectionProps) {
       <div
         className={cn(
           "grid gap-4 md:grid-cols-2",
-          role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-3"
+          role === "admin" ? "lg:grid-cols-4 xl:grid-cols-5" : "lg:grid-cols-4"
         )}
       >
         <StatCard
@@ -86,6 +99,37 @@ export async function StatsSection({ role }: StatsSectionProps) {
           icon={UserCheck}
           description="Last 30 days"
         />
+        <StatCard
+          title="Active Campaigns"
+          value={activeCampaigns}
+          icon={Megaphone}
+          description="Currently running"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="flex flex-col justify-between">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">Pending Reviews</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>View and approve receipts awaiting review.</p>
+            <Button asChild>
+              <Link href="/dashboard/receipts">Go to pending receipts</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card className="flex flex-col justify-between">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">Manage Campaigns</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>Launch new promotions or update existing campaigns.</p>
+            <Button asChild variant="secondary">
+              <Link href="/dashboard/campaigns">Go to campaigns</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
