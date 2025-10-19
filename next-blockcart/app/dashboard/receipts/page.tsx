@@ -92,6 +92,11 @@ interface ReviewActionPayload {
   comment: string
 }
 
+interface ReviewerOption {
+  id: string
+  label: string
+}
+
 const statusStyles: Record<ReceiptStatus, string> = {
   pending: "bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20",
   pending_review: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20",
@@ -234,6 +239,11 @@ export default function ReceiptsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ReceiptStatus | "all">("all")
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({})
+  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([])
+  const [storeOptions, setStoreOptions] = useState<string[]>([])
+  const [reviewerFilter, setReviewerFilter] = useState<string | "all">("all")
+  const [reviewerFilterInitialized, setReviewerFilterInitialized] = useState(false)
+  const [storeFilter, setStoreFilter] = useState<string | "all">("all")
   const [isLoading, setIsLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -273,11 +283,19 @@ export default function ReceiptsPage() {
           )`,
           { count: "exact" },
         )
-        .eq("reviewer_id", user.id)
         .eq("status", "assigned")
         .is("released_at", null)
         .order("created_at", { referencedTable: "receipts", ascending: false })
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+
+      const reviewerIdFilter =
+        reviewerFilter === "all" ? null : reviewerFilter ?? null
+
+      if (reviewerIdFilter) {
+        query = query.eq("reviewer_id", reviewerIdFilter)
+      } else if (!reviewerFilterInitialized && user?.id) {
+        query = query.eq("reviewer_id", user.id)
+      }
 
       if (statusFilter !== "all") {
         query = query.eq("receipts.status", statusFilter)
@@ -289,6 +307,10 @@ export default function ReceiptsPage() {
 
       if (dateRange.to) {
         query = query.lte("receipts.receipt_date", dateRange.to)
+      }
+
+      if (storeFilter !== "all") {
+        query = query.eq("receipts.store", storeFilter)
       }
 
       if (searchQuery.trim()) {
@@ -327,13 +349,109 @@ export default function ReceiptsPage() {
     dateRange.to,
     loading,
     page,
+    reviewerFilter,
+    reviewerFilterInitialized,
     searchQuery,
     statusFilter,
+    storeFilter,
     supabase,
     toast,
     user?.id,
     userRole,
   ])
+
+  useEffect(() => {
+    if (!user?.id || reviewerFilterInitialized) {
+      return
+    }
+
+    setReviewerFilter(user.id)
+    setReviewerFilterInitialized(true)
+  }, [reviewerFilterInitialized, user?.id])
+
+  useEffect(() => {
+    if (loading || reviewerFilterInitialized || user?.id) {
+      return
+    }
+
+    setReviewerFilterInitialized(true)
+  }, [loading, reviewerFilterInitialized, user?.id])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadReviewerOptions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("web_user_profiles")
+          .select("id,email,full_name")
+          .order("full_name", { ascending: true })
+
+        if (error) throw error
+
+        if (!isMounted) return
+
+        const options = ((data ?? []) as SupabaseWebUserRow[]).map((item) => ({
+          id: item.id,
+          label: item.full_name || item.email || item.id,
+        }))
+
+        setReviewerOptions(options)
+      } catch (error) {
+        console.error("Failed to load reviewer options", error)
+      }
+    }
+
+    loadReviewerOptions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadStoreOptions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("receipts")
+          .select("store", { distinct: true })
+          .not("store", "is", null)
+          .order("store", { ascending: true })
+
+        if (error) throw error
+
+        if (!isMounted) return
+
+        const stores = Array.from(
+          new Set(
+            ((data ?? []) as { store: string | null }[])
+              .map((item) => item.store)
+              .filter((store): store is string => typeof store === "string" && store.trim().length > 0),
+          ),
+        )
+
+        setStoreOptions(stores)
+      } catch (error) {
+        console.error("Failed to load store options", error)
+      }
+    }
+
+    loadStoreOptions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    if (!reviewerFilterInitialized) {
+      return
+    }
+
+    fetchReceipts()
+  }, [fetchReceipts, reviewerFilterInitialized])
 
   useEffect(() => {
     if (loading) {
@@ -344,10 +462,6 @@ export default function ReceiptsPage() {
       router.replace("/dashboard")
     }
   }, [loading, router, userRole])
-
-  useEffect(() => {
-    fetchReceipts()
-  }, [fetchReceipts])
 
   useEffect(() => {
     const receiptId = selectedReceipt?.id
@@ -388,7 +502,6 @@ export default function ReceiptsPage() {
       isActive = false
     }
   }, [dialogOpen, selectedReceipt?.id, supabase])
-
   const handleReview = useCallback(
     async (receipt: Receipt, approved: boolean, payload: ReviewActionPayload) => {
       if (!user || userRole !== "reviewer") {
@@ -540,6 +653,22 @@ export default function ReceiptsPage() {
     { label: "Error", value: "error" },
   ]
 
+  const reviewerSelectOptions = useMemo(
+    () => [
+      { label: "All Reviewers", value: "all" as const },
+      ...reviewerOptions.map((option) => ({ label: option.label, value: option.id })),
+    ],
+    [reviewerOptions],
+  )
+
+  const storeSelectOptions = useMemo(
+    () => [
+      { label: "All Stores", value: "all" as const },
+      ...storeOptions.map((store) => ({ label: store, value: store })),
+    ],
+    [storeOptions],
+  )
+
   return (
     <div className="space-y-6">
       <div>
@@ -549,8 +678,8 @@ export default function ReceiptsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div className="relative flex-1 md:col-span-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative flex-1 md:col-span-2 lg:col-span-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by store, ID, or location..."
@@ -581,9 +710,47 @@ export default function ReceiptsPage() {
               </SelectItem>
             ))}
           </SelectContent>
-          </Select>
+        </Select>
 
-        <div className="grid gap-2 md:col-span-2 lg:col-span-1">
+        <Select
+          value={reviewerFilter}
+          onValueChange={(value) => {
+            setReviewerFilter(value as string | "all")
+            setPage(1)
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Filter by reviewer" />
+          </SelectTrigger>
+          <SelectContent>
+            {reviewerSelectOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={storeFilter}
+          onValueChange={(value) => {
+            setStoreFilter(value as string | "all")
+            setPage(1)
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Filter by store" />
+          </SelectTrigger>
+          <SelectContent>
+            {storeSelectOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="grid gap-2 md:col-span-2 lg:col-span-2">
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               type="date"
