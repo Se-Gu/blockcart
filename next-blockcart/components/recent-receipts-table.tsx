@@ -11,12 +11,15 @@ export function RecentReceiptsTable({ receipts }: RecentReceiptsTableProps) {
   const getStatusBadge = (status: Receipt["status"]) => {
     const variants = {
       pending: "bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20",
+      pending_review: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20",
       approved: "bg-green-500/10 text-green-600 hover:bg-green-500/20",
       rejected: "bg-red-500/10 text-red-600 hover:bg-red-500/20",
-    }
+      flagged: "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20",
+      error: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+    } satisfies Record<Receipt["status"], string>
     return (
       <Badge variant="secondary" className={variants[status]}>
-        {status}
+        {status.replace("_", " ")}
       </Badge>
     )
   }
