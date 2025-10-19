@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [roleFetching, setRoleFetching] = useState(false);
   const router = useRouter();
 
   const resolveUserRole = useCallback(
@@ -42,18 +43,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Prevent duplicate role fetches
+      if (roleFetching) {
+        console.log(`Role fetch already in progress, skipping (${context})`);
+        return;
+      }
+
+      // If we already have a valid role for this user, don't fetch again
+      if (userRole && user?.id === currentUser.id) {
+        console.log(
+          `Already have role ${userRole} for user ${currentUser.id}, skipping fetch (${context})`
+        );
+        return;
+      }
+
+      setRoleFetching(true);
       const metadataRole =
         (currentUser.user_metadata?.role as UserRole | undefined) ?? null;
 
       try {
+        console.log(
+          `Starting getUserRole for user ${currentUser.id} (${context})`
+        );
         const dbRole = await getUserRole(currentUser.id);
-        setUserRole(dbRole ?? metadataRole ?? null);
+        console.log(
+          `getUserRole completed with result: ${dbRole} (${context})`
+        );
+
+        if (dbRole === null) {
+          // User not found in web_users table
+          console.log(`User not found in web_users table (${context})`);
+          setUserRole(null);
+          return;
+        }
+        const finalRole = dbRole ?? metadataRole ?? "reviewer";
+        console.log(`Resolved user role (${context}):`, finalRole);
+        setUserRole(finalRole);
       } catch (roleError) {
         console.error(`Error fetching user role (${context}):`, roleError);
-        setUserRole(metadataRole ?? null);
+        // If there's an error, set role to null to trigger redirect
+        setUserRole(null);
+      } finally {
+        setRoleFetching(false);
       }
     },
-    []
+    [roleFetching, userRole, user?.id]
   );
 
   useEffect(() => {
@@ -82,18 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session?.user?.email);
       setLoading(true);
       const currentUser = session?.user ?? null;
-      console.log("Auth state changed:", event, session?.user?.email);
       setUser(currentUser);
       setSession(session);
 
+      console.log("Resolving user role for:", currentUser?.id);
       await resolveUserRole(currentUser, "auth state change");
       setLoading(false);
 
       if (event === "SIGNED_OUT") {
+        console.log("User signed out, redirecting to login");
         router.push("/login");
-      } else if (event === "SIGNED_IN") {
+      } else if (event === "SIGNED_IN" && currentUser) {
+        console.log("User signed in successfully, redirecting to dashboard");
         router.push("/dashboard");
       }
     });

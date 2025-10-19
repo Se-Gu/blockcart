@@ -9,9 +9,12 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
+  title: "Blockcart Dashboard",
+  description: "Blockcart Admin Dashboard",
   generator: "v0.app",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -21,6 +21,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  console.log(
+    "Dashboard layout - user:",
+    user?.email,
+    "role:",
+    userRole,
+    "loading:",
+    loading
+  );
+
   useEffect(() => {
     if (loading) {
       return;
@@ -31,8 +40,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!userRole) {
-      router.replace("/login");
+    // Don't redirect if userRole is null - it might still be loading
+    // The user is authenticated, so let them stay on the page
+    if (userRole === null) {
       return;
     }
 
@@ -53,7 +63,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  if (!userRole) {
+  // If userRole is null, redirect to login (user not in web_users table)
+  if (userRole === null) {
+    router.replace("/login");
     return null;
   }
 

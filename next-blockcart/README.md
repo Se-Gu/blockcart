@@ -170,7 +170,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 The application expects the following Supabase tables:
 
-- `profiles` - User profiles with roles
+- `web_users` - Web dashboard users with roles (admin, reviewer)
 - `receipts` - Receipt submissions
 - `campaigns` - Reward campaigns
 - `rewards` - User rewards

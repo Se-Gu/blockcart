@@ -88,3 +88,11 @@ CREATE TABLE public.users (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.web_users (
+  id uuid NOT NULL,
+  role text DEFAULT 'reviewer'::text CHECK (role = ANY (ARRAY['admin'::text, 'reviewer'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT web_users_pkey PRIMARY KEY (id),
+  CONSTRAINT web_users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);

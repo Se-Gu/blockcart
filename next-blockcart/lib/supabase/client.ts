@@ -53,16 +53,43 @@ export async function getCurrentSession(): Promise<Session | null> {
 
 export async function getUserRole(userId: string): Promise<UserRole | null> {
   const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
+  console.log("Fetching user role for userId:", userId);
 
-  if (error) {
-    console.warn("Falling back to user metadata for role", error.message ?? error);
-    return null;
+  try {
+    console.log("Starting database query...");
+
+    // Add timeout to prevent hanging
+    const queryPromise = supabase
+      .from("web_users")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Query timeout after 5 seconds")), 5000)
+    );
+
+    const { data, error } = (await Promise.race([
+      queryPromise,
+      timeoutPromise,
+    ])) as any;
+
+    console.log("Database query completed. Data:", data, "Error:", error);
+
+    if (error) {
+      console.error("Error fetching user role from web_users:", error);
+      throw error; // Re-throw to be handled by caller
+    }
+
+    if (!data) {
+      console.log("User not found in web_users table");
+      return null;
+    }
+
+    console.log("User role from database:", data.role);
+    return (data.role as UserRole | undefined) ?? null;
+  } catch (err) {
+    console.error("Exception in getUserRole:", err);
+    throw err;
   }
-
-  return (data?.role as UserRole | undefined) ?? null;
 }
