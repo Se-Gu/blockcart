@@ -4,7 +4,6 @@ import type React from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useAuth } from "@/lib/auth-context";
 import type { UserRole } from "@/lib/types";
-import { deriveUserRoleFromMetadata } from "@/hooks/use-admin-guard";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -15,6 +14,8 @@ const ADMIN_ONLY_ROUTES = [
   "/dashboard/referrals",
   "/dashboard/analytics",
 ];
+
+const REVIEWER_ONLY_ROUTES = ["/dashboard/receipts"];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, userRole, loading } = useAuth();
@@ -49,8 +50,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const isAdminOnlyPath = ADMIN_ONLY_ROUTES.some((route) =>
       pathname.startsWith(route)
     );
+    const isReviewerOnlyPath = REVIEWER_ONLY_ROUTES.some((route) =>
+      pathname.startsWith(route)
+    );
 
     if (userRole === "reviewer" && isAdminOnlyPath) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    if (userRole === "admin" && isReviewerOnlyPath) {
       router.replace("/dashboard");
     }
   }, [loading, pathname, router, user, userRole]);
@@ -72,8 +81,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isAdminOnlyPath = ADMIN_ONLY_ROUTES.some((route) =>
     pathname.startsWith(route)
   );
+  const isReviewerOnlyPath = REVIEWER_ONLY_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
 
   if (userRole === "reviewer" && isAdminOnlyPath) {
+    return null;
+  }
+
+  if (userRole === "admin" && isReviewerOnlyPath) {
     return null;
   }
 

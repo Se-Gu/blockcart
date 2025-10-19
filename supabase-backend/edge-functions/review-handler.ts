@@ -21,6 +21,15 @@ serve(async (req) => {
       status: approved ? "approved" : "rejected",
     })
     .eq("id", receipt_id);
+  await supabase
+    .from("receipt_assignments")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("receipt_id", receipt_id)
+    .eq("reviewer_id", reviewer_id)
+    .eq("status", "assigned");
   await supabase.from("receipt_reviews").insert({
     receipt_id,
     reviewer_id,

@@ -27,10 +27,12 @@ export interface ActivityEvent {
   timestamp: string;
 }
 
-type CountResponse = Promise<{
+type CountResult = {
   count: number | null;
   error: { message: string } | null;
-}>;
+};
+
+type CountResponse = Promise<CountResult>;
 
 async function resolveCount(promise: CountResponse): Promise<number> {
   const { count, error } = await promise;
@@ -225,21 +227,32 @@ export async function fetchActiveUsers(
 export async function fetchTotalUsers(
   supabase: SupabaseClient
 ): Promise<number> {
-  const webUsersResult = (await supabase
-    .from("web_users")
-    .select("id", { count: "exact", head: true })) as {
-    count: number | null;
-    error: { message: string } | null;
-  };
+  const [webUsersResult, mobileUsersResult] = await Promise.all([
+    supabase
+      .from("web_users")
+      .select("id", { count: "exact", head: true }) as CountResponse,
+    supabase
+      .from("mobile_users")
+      .select("id", { count: "exact", head: true }) as CountResponse,
+  ]);
 
-  if (!webUsersResult.error) {
-    return webUsersResult.count ?? 0;
+  let total = 0;
+
+  if (webUsersResult.error) {
+    console.warn("Failed to count web users", webUsersResult.error);
+  } else {
+    total += webUsersResult.count ?? 0;
   }
 
-  console.warn(
-    "Falling back to users table for total user count",
-    webUsersResult.error
-  );
+  if (mobileUsersResult.error) {
+    console.warn("Failed to count mobile users", mobileUsersResult.error);
+  } else {
+    total += mobileUsersResult.count ?? 0;
+  }
+
+  if (total > 0 || (!webUsersResult.error && !mobileUsersResult.error)) {
+    return total;
+  }
 
   const usersResult = (await supabase
     .from("users")
@@ -250,10 +263,10 @@ export async function fetchTotalUsers(
 
   if (usersResult.error) {
     console.error("Failed to fetch total users", usersResult.error);
-    return 0;
+    return total;
   }
 
-  return usersResult.count ?? 0;
+  return total + (usersResult.count ?? 0);
 }
 
 export async function fetchUserRole(
