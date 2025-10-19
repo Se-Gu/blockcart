@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Search, UserPlus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { UserDetailDialog } from "@/components/user-detail-dialog"
 import type { User, UserRole } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -19,108 +20,133 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
-    let isMounted = true
-
-    const fetchUsers = async () => {
-      setIsLoading(true)
-      setError(null)
-
-      const supabase = getSupabaseBrowserClient()
-
-      try {
-        const [usersResponse, rewardsResponse, referralsResponse] = await Promise.all([
-          supabase
-            .from("users")
-            .select("id, email, wallet_address, referral_code, created_at, updated_at"),
-          supabase.from("rewards").select("user_id, amount"),
-          supabase.from("referrals").select("referrer, bonus"),
-        ])
-
-        if (usersResponse.error) {
-          throw usersResponse.error
-        }
-
-        if (rewardsResponse.error) {
-          throw rewardsResponse.error
-        }
-
-        if (referralsResponse.error) {
-          throw referralsResponse.error
-        }
-
-        const rewardTotals = new Map<string, number>()
-        rewardsResponse.data?.forEach((reward) => {
-          const userId = reward.user_id
-          const amount = typeof reward.amount === "number" ? reward.amount : Number(reward.amount)
-          if (!userId || Number.isNaN(amount)) return
-          rewardTotals.set(userId, (rewardTotals.get(userId) ?? 0) + amount)
-        })
-
-        const referralStats = new Map<string, { count: number; bonus: number }>()
-        referralsResponse.data?.forEach((referral) => {
-          const referrerId = (referral as { referrer?: string | null }).referrer ?? null
-
-          if (!referrerId) return
-
-          const rawBonus =
-            (referral as { bonus?: number | string | null }).bonus ??
-            0
-
-          const bonus = typeof rawBonus === "number" ? rawBonus : Number(rawBonus)
-          const stats = referralStats.get(referrerId) ?? { count: 0, bonus: 0 }
-          stats.count += 1
-          if (!Number.isNaN(bonus)) {
-            stats.bonus += bonus
-          }
-          referralStats.set(referrerId, stats)
-        })
-
-        const userRows = usersResponse.data ?? []
-        const nextUsers: User[] = userRows.map((profile) => {
-          const rewardTotal = rewardTotals.get(profile.id) ?? 0
-          const referral = referralStats.get(profile.id)
-          const lifetimeTokens = rewardTotal + (referral?.bonus ?? 0)
-
-          return {
-            id: profile.id,
-            email: profile.email,
-            full_name: null,
-            role: "reviewer",
-            created_at: profile.created_at,
-            last_login: profile.updated_at ?? null,
-            wallet_address: profile.wallet_address ?? null,
-            referral_code: (profile as { referral_code?: string | null }).referral_code ?? null,
-            total_rewards: rewardTotal,
-            referral_count: referral?.count ?? 0,
-            lifetime_tokens: lifetimeTokens,
-          }
-        })
-
-        if (isMounted) {
-          setUsers(nextUsers)
-        }
-      } catch (err) {
-        console.error("Failed to load users", err)
-        if (isMounted) {
-          const message = err instanceof Error ? err.message : "Unknown error"
-          setError(message)
-          setUsers([])
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    fetchUsers()
-
+    isMountedRef.current = true
     return () => {
-      isMounted = false
+      isMountedRef.current = false
     }
   }, [])
+
+  const fetchUsers = useCallback(async () => {
+    if (!isMountedRef.current) return
+
+    setIsLoading(true)
+    setError(null)
+
+    const supabase = getSupabaseBrowserClient()
+
+    try {
+      const [usersResponse, webUsersResponse, rewardsResponse, referralsResponse] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id, email, wallet_address, referral_code, created_at, updated_at"),
+        supabase.from("web_users").select("id, role"),
+        supabase.from("rewards").select("user_id, amount"),
+        supabase.from("referrals").select("referrer, bonus"),
+      ])
+
+      if (usersResponse.error) {
+        throw usersResponse.error
+      }
+
+      if (webUsersResponse.error) {
+        throw webUsersResponse.error
+      }
+
+      if (rewardsResponse.error) {
+        throw rewardsResponse.error
+      }
+
+      if (referralsResponse.error) {
+        throw referralsResponse.error
+      }
+
+      const rewardTotals = new Map<string, number>()
+      rewardsResponse.data?.forEach((reward) => {
+        const userId = reward.user_id
+        const amount = typeof reward.amount === "number" ? reward.amount : Number(reward.amount)
+        if (!userId || Number.isNaN(amount)) return
+        rewardTotals.set(userId, (rewardTotals.get(userId) ?? 0) + amount)
+      })
+
+      const referralStats = new Map<string, { count: number; bonus: number }>()
+      referralsResponse.data?.forEach((referral) => {
+        const referrerId = (referral as { referrer?: string | null }).referrer ?? null
+
+        if (!referrerId) return
+
+        const rawBonus =
+          (referral as { bonus?: number | string | null }).bonus ??
+          0
+
+        const bonus = typeof rawBonus === "number" ? rawBonus : Number(rawBonus)
+        const stats = referralStats.get(referrerId) ?? { count: 0, bonus: 0 }
+        stats.count += 1
+        if (!Number.isNaN(bonus)) {
+          stats.bonus += bonus
+        }
+        referralStats.set(referrerId, stats)
+      })
+
+      const roleMap = new Map<string, UserRole>()
+      webUsersResponse.data?.forEach((webUser) => {
+        const webUserId = (webUser as { id?: string | null }).id
+        const role = (webUser as { role?: string | null }).role
+        if (!webUserId) return
+        if (role === "admin" || role === "reviewer") {
+          roleMap.set(webUserId, role)
+        }
+      })
+
+      const userRows = usersResponse.data ?? []
+      const nextUsers: User[] = userRows.map((profile) => {
+        const rewardTotal = rewardTotals.get(profile.id) ?? 0
+        const referral = referralStats.get(profile.id)
+        const lifetimeTokens = rewardTotal + (referral?.bonus ?? 0)
+        const role = roleMap.get(profile.id) ?? "reviewer"
+
+        return {
+          id: profile.id,
+          email: profile.email,
+          full_name: null,
+          role,
+          created_at: profile.created_at,
+          last_login: profile.updated_at ?? null,
+          wallet_address: profile.wallet_address ?? null,
+          referral_code: (profile as { referral_code?: string | null }).referral_code ?? null,
+          total_rewards: rewardTotal,
+          referral_count: referral?.count ?? 0,
+          lifetime_tokens: lifetimeTokens,
+        }
+      })
+
+      if (isMountedRef.current) {
+        setUsers(nextUsers)
+      }
+    } catch (err) {
+      console.error("Failed to load users", err)
+      if (!isMountedRef.current) return
+      const message = err instanceof Error ? err.message : "Unknown error"
+      setError(message)
+      setUsers([])
+      toast({
+        title: "Failed to load users",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false)
+      }
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
 
   const selectedUser = selectedUserId ? users.find((user) => user.id === selectedUserId) ?? null : null
 
@@ -130,10 +156,40 @@ export default function UsersPage() {
     }
   }, [dialogOpen])
 
-  const handleUpdateRole = async (userId: string, role: UserRole) => {
-    setUsers((prev) => prev)
-    throw new Error("Role management is not supported with the current Supabase schema")
-  }
+  const handleUpdateRole = useCallback(
+    async (userId: string, role: UserRole) => {
+      const supabase = getSupabaseBrowserClient()
+
+      const { error: upsertError } = await supabase
+        .from("web_users")
+        .upsert(
+          {
+            id: userId,
+            role,
+          },
+          { onConflict: "id" }
+        )
+
+      if (upsertError) {
+        console.error("Failed to update user role", upsertError)
+        throw new Error(upsertError.message ?? "Unable to update role")
+      }
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? {
+                ...user,
+                role,
+              }
+            : user
+        )
+      )
+
+      await fetchUsers()
+    },
+    [fetchUsers]
+  )
 
   const filteredUsers = users.filter((user) => {
     const normalizedSearch = searchQuery.toLowerCase()
