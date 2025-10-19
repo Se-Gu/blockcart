@@ -3,6 +3,8 @@
 import type React from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useAuth } from "@/lib/auth-context";
+import type { UserRole } from "@/lib/types";
+import { deriveUserRoleFromMetadata } from "@/hooks/use-admin-guard";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -24,9 +26,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // For now, assume all authenticated users are admins
-  // In production, you'd check user metadata or a user roles table
-  const userRole = "admin" as const;
+  const userRole = (user ? deriveUserRoleFromMetadata(user) : "admin") as UserRole;
   const userEmail = user.email || "";
 
   return (
