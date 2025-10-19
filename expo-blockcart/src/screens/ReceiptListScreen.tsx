@@ -1,79 +1,111 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  RefreshControl,
-  ScrollView,
-  View,
-  StyleSheet,
+  FlatList,
   Pressable,
+  StyleSheet,
+  View,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Surface, Text, useTheme, IconButton, FAB } from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
+import {
+  Button,
+  FAB,
+  IconButton,
+  Surface,
+  Text,
+  useTheme,
+} from "react-native-paper";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
-import type { Receipt } from "../types";
+import type { Receipt, ReceiptStatus } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import LoadingView from "../components/LoadingView";
 import { useErrorHandler } from "../hooks/useErrorHandler";
-import { useFocusEffect } from "@react-navigation/native";
 import { colors, spacing, borderRadius } from "../theme/colors";
 
 const PAGE_LIMIT = 20;
 
-type ReceiptRow = Pick<
+type ReceiptListItem = Pick<
   Receipt,
-  "id" | "created_at" | "store" | "total" | "status" | "parsed_json"
+  "id" | "created_at" | "store" | "total" | "status" | "receipt_date"
 >;
 
 type Props = NativeStackScreenProps<ReceiptsStackParamList, "ReceiptList">;
+
+const formatCurrency = (value: number | null | undefined) => {
+  if (typeof value === "number") {
+    return `$${value.toFixed(2)}`;
+  }
+  return "--";
+};
+
+const formatDateValue = (value: string | null | undefined) => {
+  if (!value) {
+    return "--";
+  }
+  const timestamp = Date.parse(value);
+  if (isNaN(timestamp)) {
+    return "--";
+  }
+  return new Date(timestamp).toLocaleDateString();
+};
+
+const isWarningStatus = (status: ReceiptStatus) =>
+  status === "flagged" || status === "error";
 
 export default function ReceiptListScreen({ navigation }: Props) {
   const theme = useTheme();
   const { session } = useAuth();
   const { handleError } = useErrorHandler({ context: "Receipt List" });
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [receipts, setReceipts] = useState<ReceiptListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchReceipts = useCallback(async () => {
     if (!session?.user) {
+      setReceipts([]);
+      setLoading(false);
+      setRefreshing(false);
       return;
     }
-    setLoading(true);
+
     try {
-      const { data, error: queryError } = await supabase
+      const { data, error } = await supabase
         .from("receipts")
-        .select("id, created_at, store, total, status, parsed_json")
+        .select("id, created_at, store, total, status, receipt_date")
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false })
         .limit(PAGE_LIMIT);
 
-      if (queryError) {
-        throw queryError;
+      if (error) {
+        throw error;
       }
 
-      const receiptsRaw = data as unknown;
-      const receiptsData = Array.isArray(receiptsRaw)
-        ? (receiptsRaw as ReceiptRow[])
-        : [];
-
-      setReceipts(receiptsData as Receipt[]);
-    } catch (err) {
-      handleError(err, "Loading receipts");
+      const rows = Array.isArray(data)
+        ? (data as ReceiptListItem[])
+        : ([] as ReceiptListItem[]);
+      setReceipts(rows);
+    } catch (error) {
+      handleError(error, "Loading receipts");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session, handleError]);
+  }, [session?.user, handleError]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void fetchReceipts();
-    }, [fetchReceipts])
-  );
+  useEffect(() => {
+    if (!session?.user) {
+      setReceipts([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    void fetchReceipts();
+  }, [session?.user, fetchReceipts]);
 
   const handleRefresh = useCallback(() => {
     if (refreshing) {
@@ -81,192 +113,183 @@ export default function ReceiptListScreen({ navigation }: Props) {
     }
     setRefreshing(true);
     void fetchReceipts();
-  }, [fetchReceipts, refreshing]);
+  }, [refreshing, fetchReceipts]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`receipts-list-${session.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "receipts",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload: RealtimePostgresChangesPayload<ReceiptListItem>) => {
+          if (payload.eventType === "DELETE") {
+            const oldRow = (payload.old as { id?: string } | null)?.id;
+            if (oldRow) {
+              setReceipts((prev) =>
+                prev.filter((receipt) => receipt.id !== oldRow)
+              );
+            }
+            return;
+          }
+
+          const newRow = payload.new as ReceiptListItem | null;
+          if (!newRow) {
+            return;
+          }
+
+          setReceipts((prev) => {
+            const existingIndex = prev.findIndex(
+              (receipt) => receipt.id === newRow.id
+            );
+            const next = [...prev];
+            if (existingIndex === -1) {
+              next.unshift(newRow);
+            } else {
+              next[existingIndex] = { ...next[existingIndex], ...newRow };
+            }
+            next.sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            );
+            return next.slice(0, PAGE_LIMIT);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [session?.user]);
+
+  const renderReceipt = useCallback(
+    ({ item }: { item: ReceiptListItem }) => {
+      const displayDate = item.receipt_date ?? item.created_at;
+
+      return (
+        <Surface style={styles.receiptCard} elevation={1}>
+          <Pressable
+            onPress={() =>
+              navigation.navigate("ReceiptDetail", { receiptId: item.id })
+            }
+            style={styles.receiptPressable}
+          >
+            <View style={styles.receiptContent}>
+              <View style={styles.receiptInfo}>
+                <Text variant="titleMedium" style={styles.receiptTitle}>
+                  {item.store ?? "Processing receipt"}
+                </Text>
+                <Text variant="bodySmall" style={styles.receiptSubtitle}>
+                  {formatCurrency(item.total)} • {formatDateValue(displayDate)}
+                </Text>
+              </View>
+
+              <View style={styles.receiptStatus}>
+                {isWarningStatus(item.status) ? (
+                  <IconButton
+                    icon="alert-circle"
+                    size={18}
+                    iconColor={theme.colors.error}
+                    style={styles.warningIcon}
+                  />
+                ) : null}
+                <ReceiptStatusChip status={item.status} />
+                <IconButton
+                  icon="chevron-right"
+                  size={18}
+                  iconColor={theme.colors.onSurfaceVariant}
+                  style={styles.chevronIcon}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Surface>
+      );
+    },
+    [navigation, theme.colors.error, theme.colors.onSurfaceVariant]
+  );
+
+  const keyExtractor = useCallback((item: ReceiptListItem) => item.id, []);
+
+  const renderEmpty = useCallback(() => {
+    if (loading) {
+      return null;
+    }
+    return (
+      <Surface style={styles.emptyState} elevation={0}>
+        <Text variant="titleMedium" style={styles.emptyTitle}>
+          No receipts yet
+        </Text>
+        <Text variant="bodyMedium" style={styles.emptySubtitle}>
+          Upload a receipt to start tracking your rewards.
+        </Text>
+        <Button
+          mode="contained"
+          icon="camera-plus"
+          onPress={() => navigation.navigate("UploadReceipt")}
+        >
+          Upload receipt
+        </Button>
+      </Surface>
+    );
+  }, [loading, navigation]);
 
   if (loading && receipts.length === 0) {
     return <LoadingView message="Fetching your receipts" />;
   }
 
   return (
-    <>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+    <View style={styles.screen}>
+      <FlatList
+        data={receipts}
+        keyExtractor={keyExtractor}
+        renderItem={renderReceipt}
+        contentContainerStyle={
+          receipts.length === 0
+            ? [styles.listContent, styles.emptyContent]
+            : styles.listContent
         }
-      >
-        {receipts.length === 0 ? (
-          <Surface style={styles.emptyCard} elevation={2}>
-            <LinearGradient
-              colors={[`${colors.primary}10`, `${colors.accent}05`]}
-              style={styles.emptyGradient}
-            >
-              <View style={styles.emptyIconContainer}>
-                <IconButton
-                  icon="receipt-text-outline"
-                  size={64}
-                  iconColor={colors.primary}
-                  style={{ margin: 0 }}
-                />
-              </View>
-              <Text variant="headlineSmall" style={styles.emptyTitle}>
-                No Receipts Yet
-              </Text>
-              <Text variant="bodyLarge" style={styles.emptySubtitle}>
-                Upload your first receipt to start earning BCT$ rewards
-              </Text>
-              <LinearGradient
-                colors={[colors.primary, colors.accent]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.emptyButtonGradient}
-              >
-                <IconButton
-                  icon="camera-plus"
-                  size={24}
-                  iconColor={theme.colors.onPrimary}
-                  style={{ margin: 0 }}
-                  onPress={() => navigation.navigate("UploadReceipt")}
-                />
-              </LinearGradient>
-            </LinearGradient>
-          </Surface>
-        ) : (
-          <View style={styles.receiptsList}>
-            {receipts.map((receipt) => (
-              <Surface
-                key={receipt.id}
-                style={styles.receiptCard}
-                elevation={2}
-              >
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate("ReceiptDetail", {
-                      receiptId: receipt.id,
-                    })
-                  }
-                  style={styles.receiptPressable}
-                >
-                  <View style={styles.receiptContent}>
-                    <View style={styles.receiptIconContainer}>
-                      <LinearGradient
-                        colors={[`${colors.primary}25`, `${colors.primary}10`]}
-                        style={styles.receiptIconGradient}
-                      >
-                        <IconButton
-                          icon="receipt"
-                          size={28}
-                          iconColor={colors.primary}
-                          style={{ margin: 0 }}
-                        />
-                      </LinearGradient>
-                    </View>
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        ListEmptyComponent={renderEmpty}
+      />
 
-                    <View style={styles.receiptInfo}>
-                      <Text variant="titleMedium" style={styles.receiptStore}>
-                        {receipt.store ?? "Processing..."}
-                      </Text>
-                      <View style={styles.receiptMeta}>
-                        <Text variant="bodyMedium" style={styles.receiptAmount}>
-                          ${receipt.total?.toFixed(2) ?? "--"}
-                        </Text>
-                        <Text variant="bodySmall" style={styles.receiptDot}>
-                          •
-                        </Text>
-                        <Text variant="bodySmall" style={styles.receiptDate}>
-                          {new Date(receipt.created_at).toLocaleDateString()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.receiptRight}>
-                      <ReceiptStatusChip status={receipt.status} />
-                      <IconButton
-                        icon="chevron-right"
-                        size={20}
-                        iconColor={colors.textSecondary}
-                        style={{ margin: 0 }}
-                      />
-                    </View>
-                  </View>
-                </Pressable>
-              </Surface>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-
-      {receipts.length > 0 && (
-        <LinearGradient
-          colors={[colors.primary, colors.accent]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fabGradient}
-        >
-          <FAB
-            icon="plus"
-            style={styles.fab}
-            onPress={() => navigation.navigate("UploadReceipt")}
-            color={theme.colors.onPrimary}
-            customSize={56}
-          />
-        </LinearGradient>
-      )}
-    </>
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => navigation.navigate("UploadReceipt")}
+        color={theme.colors.onPrimary}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
+    flex: 1,
+  },
+  listContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
-    paddingBottom: 100,
   },
-  emptyCard: {
-    borderRadius: borderRadius.xl,
-    overflow: "hidden",
-    marginTop: spacing.xl,
-  },
-  emptyGradient: {
-    padding: spacing.xl * 2,
-    alignItems: "center",
-    gap: spacing.lg,
-  },
-  emptyIconContainer: {
-    backgroundColor: `${colors.primary}15`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-  },
-  emptyTitle: {
-    fontWeight: "700",
-    color: colors.textPrimary,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyButtonGradient: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
+  emptyContent: {
+    flexGrow: 1,
     justifyContent: "center",
-    marginTop: spacing.md,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  receiptsList: {
-    gap: spacing.md,
   },
   receiptCard: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     overflow: "hidden",
     backgroundColor: colors.surface,
   },
@@ -276,59 +299,52 @@ const styles = StyleSheet.create({
   receiptContent: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: spacing.md,
-  },
-  receiptIconContainer: {
-    borderRadius: borderRadius.lg,
-    overflow: "hidden",
-  },
-  receiptIconGradient: {
-    width: 56,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
   },
   receiptInfo: {
     flex: 1,
     gap: spacing.xs,
   },
-  receiptStore: {
-    fontWeight: "700",
+  receiptTitle: {
+    fontWeight: "600",
     color: colors.textPrimary,
   },
-  receiptMeta: {
+  receiptSubtitle: {
+    color: colors.textSecondary,
+  },
+  receiptStatus: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
   },
-  receiptAmount: {
-    fontWeight: "600",
-    color: colors.primary,
+  warningIcon: {
+    margin: 0,
   },
-  receiptDot: {
-    color: colors.textSecondary,
-  },
-  receiptDate: {
-    color: colors.textSecondary,
-  },
-  receiptRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  fabGradient: {
-    position: "absolute",
-    right: spacing.md,
-    bottom: spacing.md,
-    borderRadius: 28,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+  chevronIcon: {
+    margin: 0,
   },
   fab: {
-    backgroundColor: "transparent",
-    margin: 0,
+    position: "absolute",
+    right: spacing.lg,
+    bottom: spacing.lg,
+    backgroundColor: colors.primary,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+  },
+  emptyTitle: {
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  emptySubtitle: {
+    textAlign: "center",
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.md,
   },
 });

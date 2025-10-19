@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Image, ScrollView, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
@@ -20,7 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import { useErrorHandler } from "../hooks/useErrorHandler";
 import { useToast } from "../components/ToastProvider";
 import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
-import type { Receipt } from "../types";
+import type { ReceiptStatus } from "../types";
 import { colors, spacing, borderRadius } from "../theme/colors";
 
 const DAILY_RECEIPT_LIMIT = 2;
@@ -36,6 +36,11 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [successStatus, setSuccessStatus] = useState<ReceiptStatus | null>(
+    null
+  );
+  const [eta, setEta] = useState<string | null>(null);
 
   const pickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -108,6 +113,9 @@ export default function UploadReceiptScreen({ navigation }: Props) {
       return;
     }
 
+    setSuccessMessage(null);
+    setSuccessStatus(null);
+    setEta(null);
     setSubmitting(true);
 
     try {
@@ -123,7 +131,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
       const { error: uploadError } = await supabase.storage
         .from("receipts")
         .upload(path, blob, {
-          contentType: selectedImage.mimeType ?? "image/jpeg",
+          contentType: "image/jpeg",
           upsert: false,
         });
 
@@ -135,34 +143,48 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         data: { publicUrl },
       } = supabase.storage.from("receipts").getPublicUrl(path);
 
-      type ReceiptInsertRow = Pick<Receipt, "id" | "image_url">;
+      const { data: functionData, error: functionError } =
+        await supabase.functions.invoke("upload-receipt", {
+          body: {
+            user_id: session.user.id,
+            image_url: publicUrl,
+          },
+        });
 
-      const { data: receiptRecord, error: insertError } = await supabase
-        .from("receipts")
-        .insert({
-          user_id: session.user.id,
-          image_url: publicUrl,
-          status: "pending",
-        })
-        .select("id, image_url")
-        .single();
-
-      if (insertError || !receiptRecord) {
-        throw insertError ?? new Error("Unable to save receipt record");
+      if (functionError) {
+        const message =
+          typeof functionError === "object" && functionError !== null &&
+          "message" in functionError &&
+          typeof (functionError as { message?: unknown }).message === "string"
+            ? ((functionError as { message?: string }).message as string)
+            : "Unable to start receipt review.";
+        showWarning(message);
+        return;
       }
 
-      const receiptRow = receiptRecord as ReceiptInsertRow;
+      const result = (functionData ?? {}) as {
+        success?: boolean;
+        message?: string;
+        status?: ReceiptStatus;
+        eta?: string;
+      };
 
-      await supabase.functions.invoke("ocr-parser", {
-        body: {
-          receipt_id: receiptRow.id,
-          image_url: publicUrl,
-        },
-      });
+      if (result.success === false) {
+        const message =
+          result.message ?? "Unable to start receipt review for this receipt.";
+        showWarning(message);
+        return;
+      }
 
-      showSuccess(
-        "Receipt uploaded successfully! Processing will begin shortly."
-      );
+      const message =
+        result.message ??
+        "Receipt uploaded successfully. Pending review will begin shortly.";
+      const status = result.status ?? "pending_review";
+
+      showSuccess(message);
+      setSuccessMessage(message);
+      setSuccessStatus(status);
+      setEta(result.eta ?? null);
       setSuccessVisible(true);
       setSelectedImage(null);
     } catch (error) {
@@ -178,6 +200,17 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     showSuccess,
     handleError,
   ]);
+
+  const formattedEta = useMemo(() => {
+    if (!eta) {
+      return null;
+    }
+    const etaDate = new Date(eta);
+    if (isNaN(etaDate.getTime())) {
+      return null;
+    }
+    return etaDate.toLocaleString();
+  }, [eta]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -323,7 +356,12 @@ export default function UploadReceiptScreen({ navigation }: Props) {
       <Portal>
         <Modal
           visible={successVisible}
-          onDismiss={() => setSuccessVisible(false)}
+          onDismiss={() => {
+            setSuccessVisible(false);
+            setSuccessMessage(null);
+            setSuccessStatus(null);
+            setEta(null);
+          }}
           contentContainerStyle={[
             styles.modal,
             { backgroundColor: theme.colors.surface },
@@ -347,9 +385,19 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             Receipt Submitted!
           </Text>
           <Text variant="bodyLarge" style={styles.modalText}>
-            We're processing your receipt. You'll be notified when it's approved
-            and BCT$ is added to your wallet.
+            {successMessage ??
+              "We're processing your receipt. You'll be notified when it's approved."}
           </Text>
+          {successStatus ? (
+            <Text variant="bodyMedium" style={styles.modalStatus}>
+              Current status: {successStatus.replace("_", " ")}
+            </Text>
+          ) : null}
+          {formattedEta ? (
+            <Text variant="bodyMedium" style={styles.modalEta}>
+              Estimated completion: {formattedEta}
+            </Text>
+          ) : null}
 
           <LinearGradient
             colors={[colors.primary, colors.accent]}
@@ -364,6 +412,9 @@ export default function UploadReceiptScreen({ navigation }: Props) {
               buttonColor="transparent"
               onPress={() => {
                 setSuccessVisible(false);
+                setSuccessMessage(null);
+                setSuccessStatus(null);
+                setEta(null);
                 navigation.goBack();
               }}
             >
@@ -570,5 +621,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     paddingVertical: spacing.xs,
+  },
+  modalStatus: {
+    textTransform: "capitalize",
+    color: colors.textPrimary,
+  },
+  modalEta: {
+    color: colors.textSecondary,
+    textAlign: "center",
   },
 });

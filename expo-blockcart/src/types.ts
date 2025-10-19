@@ -1,15 +1,25 @@
-export type ReceiptStatus = "pending" | "approved" | "rejected";
+export type ReceiptStatus =
+  | "pending"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "flagged"
+  | "error";
 
 export type Receipt = {
   id: string;
   user_id?: string;
   created_at: string;
+  updated_at?: string;
   image_url?: string | null;
   store: string | null; // Changed from store_name to match schema
   total: number | null;
   status: ReceiptStatus;
   parsed_json?: Record<string, unknown> | null;
+  extracted_fields?: Record<string, unknown> | null;
   reward_amount?: number | null;
+  receipt_date?: string | null;
+  rejection_reason?: string | null;
 };
 
 export type Reward = {
