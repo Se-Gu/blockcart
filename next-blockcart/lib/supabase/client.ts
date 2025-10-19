@@ -60,7 +60,8 @@ export async function getUserRole(userId: string): Promise<UserRole | null> {
     .maybeSingle();
 
   if (error) {
-    throw error;
+    console.warn("Falling back to user metadata for role", error.message ?? error);
+    return null;
   }
 
   return (data?.role as UserRole | undefined) ?? null;

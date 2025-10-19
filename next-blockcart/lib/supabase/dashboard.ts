@@ -76,28 +76,36 @@ export async function fetchReceiptStats(
 export async function fetchRewardStats(
   supabase: SupabaseClient
 ): Promise<RewardStats> {
-  const [{ data: rewards, error: rewardsError }, { data: pendingRewards, error: pendingError }] =
-    await Promise.all([
-      supabase.from("rewards").select("amount"),
-      supabase.from("rewards").select("amount, status").eq("status", "pending"),
-    ])
+  const [rewardsResult, pendingReceiptsResult] = await Promise.all([
+    supabase.from("rewards").select("amount"),
+    supabase
+      .from("receipts")
+      .select("reward_amount, status")
+      .in("status", ["pending", "pending_review"]),
+  ])
 
-  if (rewardsError) {
-    console.error("Failed to fetch rewards", rewardsError)
-  }
-  if (pendingError) {
-    console.error("Failed to fetch pending rewards", pendingError)
+  if (rewardsResult.error) {
+    console.error("Failed to fetch rewards", rewardsResult.error)
   }
 
-  const totalAmount = (rewards ?? []).reduce((sum: number, reward: any) => {
+  if (pendingReceiptsResult.error) {
+    console.error("Failed to fetch pending rewards", pendingReceiptsResult.error)
+  }
+
+  const totalAmount = (rewardsResult.data ?? []).reduce((sum: number, reward: any) => {
     const amount = Number(reward.amount ?? 0)
     return sum + (Number.isFinite(amount) ? amount : 0)
   }, 0)
 
-  const pendingAmount = (pendingRewards ?? []).reduce((sum: number, reward: any) => {
-    const amount = Number(reward.amount ?? 0)
-    return sum + (Number.isFinite(amount) ? amount : 0)
-  }, 0)
+  const pendingAmount = (pendingReceiptsResult.data ?? []).reduce(
+    (sum: number, receipt: any) => {
+      const amount = Number(
+        (receipt as { reward_amount?: number | string | null }).reward_amount ?? 0
+      )
+      return sum + (Number.isFinite(amount) ? amount : 0)
+    },
+    0
+  )
 
   return {
     totalAmount,
@@ -108,26 +116,46 @@ export async function fetchRewardStats(
 export async function fetchTopCampaigns(
   supabase: SupabaseClient
 ): Promise<CampaignPerformance[]> {
-  const { data, error } = await supabase
-    .from("rewards")
-    .select("campaign_id, amount, campaigns(name)")
-    .not("campaign_id", "is", null)
+  const [rewardsResult, campaignsResult] = await Promise.all([
+    supabase
+      .from("rewards")
+      .select("campaign_id, amount")
+      .not("campaign_id", "is", null),
+    supabase.from("campaigns").select("id, brand"),
+  ])
 
-  if (error) {
-    console.error("Failed to fetch top campaigns", error)
+  if (rewardsResult.error) {
+    console.error("Failed to fetch top campaigns", rewardsResult.error)
     return []
+  }
+
+  if (campaignsResult.error) {
+    console.error("Failed to fetch campaigns", campaignsResult.error)
+  }
+
+  const campaignNames = new Map<string, string>()
+  for (const campaign of campaignsResult.data ?? []) {
+    const id = (campaign as { id?: string | null }).id
+    if (!id) continue
+    const brand = (campaign as { brand?: string | null }).brand
+    campaignNames.set(id, brand && brand.trim().length > 0 ? brand : "Unnamed Campaign")
   }
 
   const totals = new Map<string, { name: string; total: number }>()
 
-  for (const reward of data ?? []) {
-    const campaignId = reward.campaign_id as string | null
+  for (const reward of rewardsResult.data ?? []) {
+    const campaignId = (reward as { campaign_id?: string | null }).campaign_id
     if (!campaignId) continue
-    const name = (reward as any).campaigns?.name ?? "Unnamed Campaign"
-    const amount = Number((reward as any).amount ?? 0)
+
+    const amount = Number((reward as { amount?: number | string | null }).amount ?? 0)
+    const campaignName =
+      campaignNames.get(campaignId) ??
+      `Campaign ${campaignId.slice(0, 4)}${campaignId.length > 4 ? "…" : ""}`
+
     if (!totals.has(campaignId)) {
-      totals.set(campaignId, { name, total: 0 })
+      totals.set(campaignId, { name: campaignName, total: 0 })
     }
+
     const entry = totals.get(campaignId)!
     entry.total += Number.isFinite(amount) ? amount : 0
   }
@@ -218,7 +246,7 @@ export async function fetchUserRole(
     .maybeSingle()
 
   if (error) {
-    console.error("Failed to fetch user role", error)
+    console.warn("Failed to fetch user role from profiles table", error)
     return "reviewer"
   }
 
@@ -230,7 +258,7 @@ export async function fetchRecentReceipts(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("receipts")
     .select(
-      "id, user_id, image_url, total, store, receipt_date, status, created_at, reviewed_by, rejection_reason, profiles(full_name, email)"
+      "id, user_id, image_url, total, store, receipt_date, status, created_at, reviewed_by, rejection_reason, reward_amount, users:users!receipts_user_id_fkey(email, wallet_address), reviewer:users!receipts_reviewed_by_fkey(email)"
     )
     .order("created_at", { ascending: false })
     .limit(5)
@@ -254,7 +282,7 @@ export async function fetchActivityEvents(
       .limit(5),
     supabase
       .from("campaigns")
-      .select("id, name, updated_at, start_date, end_date")
+      .select("id, brand, updated_at, start_date, end_date")
       .order("updated_at", { ascending: false })
       .limit(5),
   ])
@@ -282,7 +310,7 @@ export async function fetchActivityEvents(
       events.push({
         id: `campaign-${campaign.id}`,
         type: "campaign",
-        title: campaign.name ?? "Campaign update",
+        title: (campaign as { brand?: string | null }).brand ?? "Campaign update",
         description: "Campaign schedule updated",
         timestamp: campaign.updated_at ?? campaign.start_date ?? new Date().toISOString(),
       })
