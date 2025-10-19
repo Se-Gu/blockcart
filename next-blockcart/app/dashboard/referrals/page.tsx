@@ -1,95 +1,265 @@
 "use client"
 
-import { useState } from "react"
-import { Search, UserPlus, TrendingUp } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Search, UserPlus, TrendingUp, Loader2, Download } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { Referral } from "@/lib/types"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { toast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth-context"
 
-// Mock data - in production, fetch from Supabase
-const mockReferrals: Referral[] = [
-  {
-    id: "ref1",
-    referrer_id: "u1",
-    referrer_email: "john@example.com",
-    referee_id: "u6",
-    referee_email: "david@example.com",
-    status: "completed",
-    reward_amount: 5.0,
-    created_at: "2025-01-10T10:00:00Z",
-    completed_at: "2025-01-12T14:20:00Z",
-  },
-  {
-    id: "ref2",
-    referrer_id: "u2",
-    referrer_email: "jane@example.com",
-    referee_id: "u7",
-    referee_email: "emily@example.com",
-    status: "pending",
-    reward_amount: 5.0,
-    created_at: "2025-01-14T09:30:00Z",
-  },
-  {
-    id: "ref3",
-    referrer_id: "u1",
-    referrer_email: "john@example.com",
-    referee_id: "u8",
-    referee_email: "frank@example.com",
-    status: "completed",
-    reward_amount: 5.0,
-    created_at: "2025-01-08T11:15:00Z",
-    completed_at: "2025-01-10T16:45:00Z",
-  },
-  {
-    id: "ref4",
-    referrer_id: "u3",
-    referrer_email: "bob@example.com",
-    referee_id: "u9",
-    referee_email: "grace@example.com",
-    status: "pending",
-    reward_amount: 5.0,
-    created_at: "2025-01-15T13:20:00Z",
-  },
-  {
-    id: "ref5",
-    referrer_id: "u4",
-    referrer_email: "alice@example.com",
-    referee_id: "u10",
-    referee_email: "henry@example.com",
-    status: "completed",
-    reward_amount: 5.0,
-    created_at: "2025-01-05T08:00:00Z",
-    completed_at: "2025-01-07T12:30:00Z",
-  },
-  {
-    id: "ref6",
-    referrer_id: "u2",
-    referrer_email: "jane@example.com",
-    referee_id: "u11",
-    referee_email: "isabel@example.com",
-    status: "completed",
-    reward_amount: 5.0,
-    created_at: "2025-01-03T14:45:00Z",
-    completed_at: "2025-01-05T10:20:00Z",
-  },
-]
+const STATUS_VALUES: Referral["status"][] = ["pending", "completed"]
+
+type SupabaseReferralRow = {
+  id: string
+  referrer_id: string | null
+  referee_id: string | null
+  status?: string | null
+  reward_amount: number | string | null
+  created_at: string
+  completed_at?: string | null
+  referrer?: {
+    id: string
+    email?: string | null
+    full_name?: string | null
+  } | null
+  referee?: {
+    id: string
+    email?: string | null
+    full_name?: string | null
+  } | null
+}
+
+const mapReferralRow = (row: SupabaseReferralRow): Referral => {
+  const rawStatus =
+    typeof row.status === "string" ? (row.status.toLowerCase() as Referral["status"]) : null
+  const status = rawStatus && STATUS_VALUES.includes(rawStatus) ? rawStatus : "pending"
+  const rewardAmount =
+    typeof row.reward_amount === "number"
+      ? row.reward_amount
+      : Number(row.reward_amount ?? 0)
+
+  return {
+    id: row.id,
+    referrer_id: row.referrer_id ?? "",
+    referrer_email: row.referrer?.email ?? "Unknown referrer",
+    referee_id: row.referee_id ?? "",
+    referee_email: row.referee?.email ?? "Unknown referee",
+    status,
+    reward_amount: Number.isFinite(rewardAmount) ? rewardAmount : 0,
+    created_at: row.created_at,
+    completed_at: row.completed_at ?? undefined,
+  }
+}
 
 export default function ReferralsPage() {
-  const [referrals] = useState<Referral[]>(mockReferrals)
+  const [referrals, setReferrals] = useState<Referral[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<Referral["status"] | "all">("all")
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const { user } = useAuth()
 
-  const filteredReferrals = referrals.filter((referral) => {
-    const matchesSearch =
-      referral.referrer_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      referral.referee_email.toLowerCase().includes(searchQuery.toLowerCase())
+  const isAdmin = useMemo(() => {
+    const appMetadata = (user?.app_metadata ?? {}) as Record<string, unknown>
+    const userMetadata = (user?.user_metadata ?? {}) as Record<string, unknown>
 
-    const matchesStatus = statusFilter === "all" || referral.status === statusFilter
+    const hasAdminRole = (metadata: Record<string, unknown>) => {
+      const metadataRole = metadata?.["role"]
+      const metadataRoles = metadata?.["roles"]
 
-    return matchesSearch && matchesStatus
-  })
+      if (typeof metadataRole === "string" && metadataRole === "admin") {
+        return true
+      }
+
+      if (
+        Array.isArray(metadataRoles) &&
+        metadataRoles.map((role) => `${role}`).includes("admin")
+      ) {
+        return true
+      }
+
+      return false
+    }
+
+    if (hasAdminRole(appMetadata) || hasAdminRole(userMetadata)) {
+      return true
+    }
+
+    // Fallback: the dashboard layout currently assumes authenticated users are admins
+    return true
+  }, [user])
+
+  const fetchReferrals = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError(null)
+
+    const supabase = getSupabaseBrowserClient()
+    const { data, error } = await supabase
+      .from("referrals")
+      .select(
+        `
+        id,
+        referrer_id,
+        referee_id,
+        status,
+        reward_amount,
+        created_at,
+        completed_at,
+        referrer:referrer_id (
+          id,
+          email,
+          full_name
+        ),
+        referee:referee_id (
+          id,
+          email,
+          full_name
+        )
+      `,
+      )
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Failed to load referrals", error)
+      setLoadError(error.message)
+      setReferrals([])
+      toast({
+        variant: "destructive",
+        title: "Unable to load referrals",
+        description: error.message,
+      })
+      setIsLoading(false)
+      return
+    }
+
+    const mappedReferrals = (data ?? []).map(mapReferralRow)
+    setReferrals(mappedReferrals)
+    setIsLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void fetchReferrals()
+  }, [fetchReferrals])
+
+  const filteredReferrals = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return referrals.filter((referral) => {
+      const matchesSearch =
+        query.length === 0 ||
+        referral.referrer_email.toLowerCase().includes(query) ||
+        referral.referee_email.toLowerCase().includes(query)
+
+      const matchesStatus = statusFilter === "all" || referral.status === statusFilter
+
+      return matchesSearch && matchesStatus
+    })
+  }, [referrals, searchQuery, statusFilter])
+
+  const metrics = useMemo(() => {
+    const totals = referrals.reduce(
+      (acc, referral) => {
+        acc.total += 1
+        if (referral.status === "completed") {
+          acc.completed += 1
+          acc.rewards += referral.reward_amount
+        }
+        if (referral.status === "pending") {
+          acc.pending += 1
+        }
+        return acc
+      },
+      { total: 0, completed: 0, pending: 0, rewards: 0 },
+    )
+
+    return {
+      totalReferrals: totals.total,
+      completedReferrals: totals.completed,
+      pendingReferrals: totals.pending,
+      totalRewards: totals.rewards,
+    }
+  }, [referrals])
+
+  const topReferrers = useMemo(() => {
+    const referrerStats = referrals.reduce(
+      (acc, ref) => {
+        const key = ref.referrer_email || "Unknown referrer"
+        if (!acc[key]) {
+          acc[key] = { total: 0, completed: 0 }
+        }
+        acc[key].total += 1
+        if (ref.status === "completed") {
+          acc[key].completed += 1
+        }
+        return acc
+      },
+      {} as Record<string, { total: number; completed: number }>,
+    )
+
+    return Object.entries(referrerStats)
+      .sort((a, b) => b[1].completed - a[1].completed)
+      .slice(0, 5)
+  }, [referrals])
+
+  const handleExportCsv = () => {
+    if (!referrals.length) {
+      toast({
+        variant: "destructive",
+        title: "No referrals to export",
+        description: "Add referrals before exporting to CSV.",
+      })
+      return
+    }
+
+    const escapeValue = (value: string | number | undefined) => {
+      if (value === undefined || value === null) return ""
+      const stringValue = `${value}`
+      if (stringValue.includes(",") || stringValue.includes("\"")) {
+        return `"${stringValue.replace(/"/g, '""')}"`
+      }
+      return stringValue
+    }
+
+    const header = [
+      "Referral ID",
+      "Referrer Email",
+      "Referee Email",
+      "Status",
+      "Reward Amount",
+      "Created At",
+      "Completed At",
+    ]
+
+    const rows = referrals.map((referral) => [
+      escapeValue(referral.id),
+      escapeValue(referral.referrer_email),
+      escapeValue(referral.referee_email),
+      escapeValue(referral.status),
+      escapeValue(referral.reward_amount.toFixed(2)),
+      escapeValue(new Date(referral.created_at).toISOString()),
+      escapeValue(referral.completed_at ? new Date(referral.completed_at).toISOString() : ""),
+    ])
+
+    const csvContent = [header, ...rows].map((row) => row.join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `referrals-${new Date().toISOString().split("T")[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Export started",
+      description: "Your CSV download has begun.",
+    })
+  }
 
   const getStatusBadge = (status: Referral["status"]) => {
     const variants = {
@@ -103,30 +273,6 @@ export default function ReferralsPage() {
     )
   }
 
-  const totalReferrals = referrals.length
-  const completedReferrals = referrals.filter((r) => r.status === "completed").length
-  const pendingReferrals = referrals.filter((r) => r.status === "pending").length
-  const totalRewards = referrals.filter((r) => r.status === "completed").reduce((sum, r) => sum + r.reward_amount, 0)
-
-  // Calculate top referrers
-  const referrerStats = referrals.reduce(
-    (acc, ref) => {
-      if (!acc[ref.referrer_email]) {
-        acc[ref.referrer_email] = { total: 0, completed: 0 }
-      }
-      acc[ref.referrer_email].total++
-      if (ref.status === "completed") {
-        acc[ref.referrer_email].completed++
-      }
-      return acc
-    },
-    {} as Record<string, { total: number; completed: number }>,
-  )
-
-  const topReferrers = Object.entries(referrerStats)
-    .sort((a, b) => b[1].completed - a[1].completed)
-    .slice(0, 5)
-
   return (
     <div className="space-y-6">
       <div>
@@ -134,13 +280,19 @@ export default function ReferralsPage() {
         <p className="text-muted-foreground mt-1">Track user referrals and rewards</p>
       </div>
 
+      {loadError && (
+        <div className="border border-destructive/20 bg-destructive/10 text-destructive rounded-lg p-4 text-sm">
+          {loadError}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Referrals</p>
-              <p className="text-2xl font-bold">{totalReferrals}</p>
+              <p className="text-2xl font-bold">{metrics.totalReferrals}</p>
             </div>
             <UserPlus className="h-8 w-8 text-muted-foreground" />
           </div>
@@ -149,7 +301,7 @@ export default function ReferralsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Completed</p>
-              <p className="text-2xl font-bold">{completedReferrals}</p>
+              <p className="text-2xl font-bold">{metrics.completedReferrals}</p>
             </div>
             <UserPlus className="h-8 w-8 text-green-600" />
           </div>
@@ -158,7 +310,7 @@ export default function ReferralsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Pending</p>
-              <p className="text-2xl font-bold">{pendingReferrals}</p>
+              <p className="text-2xl font-bold">{metrics.pendingReferrals}</p>
             </div>
             <UserPlus className="h-8 w-8 text-yellow-600" />
           </div>
@@ -167,7 +319,7 @@ export default function ReferralsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Rewards</p>
-              <p className="text-2xl font-bold">${totalRewards.toFixed(2)}</p>
+              <p className="text-2xl font-bold">${metrics.totalRewards.toFixed(2)}</p>
             </div>
             <TrendingUp className="h-8 w-8 text-green-600" />
           </div>
@@ -209,16 +361,30 @@ export default function ReferralsPage() {
           />
         </div>
 
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as Referral["status"] | "all")}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as Referral["status"] | "all")}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {isAdmin && (
+            <Button
+              variant="outline"
+              className="sm:ml-2"
+              onClick={handleExportCsv}
+              disabled={isLoading || !referrals.length}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Referrals Table */}
@@ -235,7 +401,16 @@ export default function ReferralsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredReferrals.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading referrals...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : filteredReferrals.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground h-32">
                   No referrals found

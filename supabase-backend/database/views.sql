@@ -49,7 +49,10 @@ select
   wu.created_at,
   wu.updated_at,
   au.email,
-  au.raw_user_meta_data ->> 'full_name'::text as full_name
+  coalesce(au.raw_user_meta_data ->> 'full_name'::text, au.email) as full_name,
+  au.last_sign_in_at as last_login,
+  au.invited_at,
+  au.email_confirmed_at
 from
   web_users wu
   join auth.users au on au.id = wu.id;
@@ -202,4 +205,27 @@ having
 order by
   reviewed desc,
   reviewer_name;
+
+create view public.maintenance_overview as
+select
+  ms.maintenance_mode,
+  ms.last_maintenance_at,
+  ms.last_aggregator_sync,
+  ms.supabase_status,
+  ms.analytics_status,
+  ms.app_version,
+  ms.updated_at
+from
+  maintenance_state ms;
+
+create view public.maintenance_task_status as
+select
+  mt.id,
+  mt.name,
+  mt.description,
+  mt.last_run_at,
+  mt.status,
+  mt.updated_at
+from
+  maintenance_tasks mt;
 
