@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Search, Plus, Pencil, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -9,109 +9,169 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CampaignFormDialog } from "@/components/campaign-form-dialog"
 import type { Campaign } from "@/lib/types"
+import { toast } from "sonner"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
-// Mock data - in production, fetch from Supabase
-const mockCampaigns: Campaign[] = [
-  {
-    id: "c1",
-    name: "Summer Grocery Rewards",
-    description: "Earn $10 for every grocery receipt submitted during summer",
-    start_date: "2025-06-01",
-    end_date: "2025-08-31",
-    reward_amount: 10.0,
-    max_participants: 1000,
-    current_participants: 456,
-    status: "active",
-    created_at: "2025-05-01T00:00:00Z",
-  },
-  {
-    id: "c2",
-    name: "Back to School Special",
-    description: "Special rewards for school supply purchases",
-    start_date: "2025-08-01",
-    end_date: "2025-09-15",
-    reward_amount: 15.0,
-    current_participants: 0,
-    status: "inactive",
-    created_at: "2025-07-15T00:00:00Z",
-  },
-  {
-    id: "c3",
-    name: "Spring Savings",
-    description: "Spring promotion for all grocery purchases",
-    start_date: "2025-03-01",
-    end_date: "2025-05-31",
-    reward_amount: 8.0,
-    max_participants: 500,
-    current_participants: 500,
-    status: "completed",
-    created_at: "2025-02-01T00:00:00Z",
-  },
-  {
-    id: "c4",
-    name: "Holiday Bonus",
-    description: "Extra rewards during the holiday season",
-    start_date: "2025-11-15",
-    end_date: "2025-12-31",
-    reward_amount: 20.0,
-    current_participants: 0,
-    status: "inactive",
-    created_at: "2025-10-01T00:00:00Z",
-  },
-]
+type CampaignStatus = "active" | "inactive" | "completed"
+
+type CampaignWithStatus = Campaign & { status: CampaignStatus }
+
+function computeCampaignStatus(campaign: Campaign): CampaignStatus {
+  const now = new Date()
+  const start = campaign.start_date ? new Date(campaign.start_date) : null
+  const end = campaign.end_date ? new Date(campaign.end_date) : null
+
+  if (start && start > now) {
+    return "inactive"
+  }
+
+  if (end && end < now) {
+    return "completed"
+  }
+
+  return "active"
+}
+
+function formatDate(value: string | null, fallback = "—") {
+  if (!value) return fallback
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return fallback
+  return date.toLocaleDateString()
+}
+
+function extractVersion(campaign: Campaign): number | null {
+  if (typeof campaign.version === "number") {
+    return campaign.version
+  }
+  const ruleJson = campaign.rule_json as Record<string, unknown> | null
+  const ruleVersion = ruleJson?.version
+  return typeof ruleVersion === "number" ? ruleVersion : null
+}
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(mockCampaigns)
+  const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<Campaign["status"] | "all">("all")
+  const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all")
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSave = async (campaignData: Partial<Campaign>) => {
-    console.log("[v0] Saving campaign:", campaignData)
-    // Placeholder for Supabase insert/update
+  const fetchCampaigns = useCallback(async () => {
+    setIsLoading(true)
 
-    if (campaignData.id) {
-      // Update existing campaign
-      setCampaigns((prev) => prev.map((c) => (c.id === campaignData.id ? { ...c, ...campaignData } : c)))
-    } else {
-      // Create new campaign
-      const newCampaign: Campaign = {
-        id: `c${campaigns.length + 1}`,
-        name: campaignData.name!,
-        description: campaignData.description!,
-        start_date: campaignData.start_date!,
-        end_date: campaignData.end_date!,
-        reward_amount: campaignData.reward_amount!,
-        max_participants: campaignData.max_participants,
-        current_participants: 0,
-        status: campaignData.status!,
-        created_at: new Date().toISOString(),
-      }
-      setCampaigns((prev) => [newCampaign, ...prev])
+    const { data, error } = await supabase
+      .from("campaigns")
+      .select("id, brand, multiplier, rule_json, start_date, end_date, updated_at, version")
+      .order("updated_at", { ascending: false, nullsFirst: false })
+
+    if (error) {
+      console.error("Failed to fetch campaigns", error)
+      toast.error("Failed to load campaigns", {
+        description: error.message,
+      })
+      setIsLoading(false)
+      return
     }
-  }
 
-  const handleDelete = async (campaignId: string) => {
-    if (!confirm("Are you sure you want to delete this campaign?")) return
+    const sanitized: Campaign[] = (data ?? []).map((entry: any) => ({
+      id: String(entry.id),
+      brand: String(entry.brand ?? "Untitled Campaign"),
+      multiplier: Number.isFinite(Number(entry.multiplier)) ? Number(entry.multiplier) : 1,
+      rule_json: entry.rule_json ?? null,
+      start_date: entry.start_date ?? null,
+      end_date: entry.end_date ?? null,
+      updated_at: entry.updated_at ?? null,
+      version: typeof entry.version === "number" ? entry.version : null,
+    }))
 
-    console.log("[v0] Deleting campaign:", campaignId)
-    // Placeholder for Supabase delete
-    setCampaigns((prev) => prev.filter((c) => c.id !== campaignId))
-  }
+    setCampaigns(sanitized)
+    setIsLoading(false)
+  }, [supabase])
 
-  const filteredCampaigns = campaigns.filter((campaign) => {
-    const matchesSearch =
-      campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    fetchCampaigns()
+  }, [fetchCampaigns])
 
-    const matchesStatus = statusFilter === "all" || campaign.status === statusFilter
+  const handleSave = useCallback(
+    async (campaignData: Partial<Campaign>) => {
+      const payload = {
+        brand: campaignData.brand,
+        multiplier:
+          typeof campaignData.multiplier === "number" && Number.isFinite(campaignData.multiplier)
+            ? campaignData.multiplier
+            : 1,
+        rule_json: campaignData.rule_json ?? null,
+        start_date: campaignData.start_date ?? null,
+        end_date: campaignData.end_date ?? null,
+      }
 
-    return matchesSearch && matchesStatus
-  })
+      if (!payload.brand) {
+        toast.error("Campaign brand is required")
+        throw new Error("Campaign brand is required")
+      }
 
-  const getStatusBadge = (status: Campaign["status"]) => {
-    const variants = {
+      const rpcName = campaignData.id ? "update_campaign" : "create_campaign"
+      const { error } = await supabase.rpc(rpcName, {
+        campaign_id: campaignData.id ?? null,
+        campaign_data: payload,
+      })
+
+      if (error) {
+        console.error(`Failed to ${campaignData.id ? "update" : "create"} campaign`, error)
+        toast.error(`Unable to ${campaignData.id ? "update" : "create"} campaign`, {
+          description: error.message,
+        })
+        throw new Error(error.message)
+      }
+
+      toast.success(`Campaign ${campaignData.id ? "updated" : "created"}`)
+      await fetchCampaigns()
+    },
+    [fetchCampaigns, supabase],
+  )
+
+  const handleDelete = useCallback(
+    async (campaignId: string) => {
+      if (!confirm("Are you sure you want to delete this campaign?")) return
+
+      const { error } = await supabase.rpc("delete_campaign", { campaign_id: campaignId })
+
+      if (error) {
+        console.error("Failed to delete campaign", error)
+        toast.error("Unable to delete campaign", {
+          description: error.message,
+        })
+        return
+      }
+
+      toast.success("Campaign deleted")
+      await fetchCampaigns()
+    },
+    [fetchCampaigns, supabase],
+  )
+
+  const filteredCampaigns: CampaignWithStatus[] = campaigns
+    .map((campaign) => ({
+      ...campaign,
+      status: computeCampaignStatus(campaign),
+    }))
+    .filter((campaign) => {
+      const query = searchQuery.trim().toLowerCase()
+      const matchesSearch =
+        query.length === 0 ||
+        campaign.brand.toLowerCase().includes(query) ||
+        JSON.stringify(campaign.rule_json ?? {})
+          .toLowerCase()
+          .includes(query)
+
+      const matchesStatus = statusFilter === "all" || campaign.status === statusFilter
+
+      return matchesSearch && matchesStatus
+    })
+
+  const getStatusBadge = (status: CampaignStatus) => {
+    const variants: Record<CampaignStatus, string> = {
       active: "bg-green-500/10 text-green-600 hover:bg-green-500/20",
       inactive: "bg-gray-500/10 text-gray-600 hover:bg-gray-500/20",
       completed: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20",
@@ -153,7 +213,7 @@ export default function CampaignsPage() {
           />
         </div>
 
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as Campaign["status"] | "all")}>
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as CampaignStatus | "all")}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
@@ -171,16 +231,22 @@ export default function CampaignsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Campaign Name</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Reward</TableHead>
-              <TableHead>Participants</TableHead>
+              <TableHead>Campaign</TableHead>
+              <TableHead>Schedule</TableHead>
+              <TableHead>Multiplier</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Last Update</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCampaigns.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground h-32">
+                  Loading campaigns...
+                </TableCell>
+              </TableRow>
+            ) : filteredCampaigns.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground h-32">
                   No campaigns found
@@ -191,26 +257,42 @@ export default function CampaignsPage() {
                 <TableRow key={campaign.id} className="hover:bg-muted/50">
                   <TableCell>
                     <div>
-                      <p className="font-medium">{campaign.name}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{campaign.description}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{campaign.brand}</p>
+                        {(() => {
+                          const version = extractVersion(campaign)
+                          return version ? (
+                            <Badge variant="secondary" className="bg-muted text-xs font-normal">
+                              v{version}
+                            </Badge>
+                          ) : null
+                        })()}
+                      </div>
+                      {campaign.rule_json ? (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1 font-mono">
+                          {JSON.stringify(campaign.rule_json)}
+                        </p>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">
                     <div>
-                      <p>{new Date(campaign.start_date).toLocaleDateString()}</p>
-                      <p className="text-muted-foreground">to {new Date(campaign.end_date).toLocaleDateString()}</p>
+                      <p>{formatDate(campaign.start_date)}</p>
+                      <p className="text-muted-foreground">to {formatDate(campaign.end_date)}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">${campaign.reward_amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">{campaign.multiplier.toFixed(2)}x</TableCell>
+                  <TableCell>{getStatusBadge(campaign.status)}</TableCell>
                   <TableCell>
                     <div className="text-sm">
-                      <p className="font-medium">{campaign.current_participants}</p>
-                      {campaign.max_participants && (
-                        <p className="text-muted-foreground">of {campaign.max_participants}</p>
-                      )}
+                      <p>{campaign.updated_at ? formatDate(campaign.updated_at) : "—"}</p>
+                      {campaign.updated_at ? (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(campaign.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      ) : null}
                     </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(campaign.status)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
@@ -239,7 +321,12 @@ export default function CampaignsPage() {
       <CampaignFormDialog
         campaign={selectedCampaign}
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            setSelectedCampaign(null)
+          }
+        }}
         onSave={handleSave}
       />
     </div>
