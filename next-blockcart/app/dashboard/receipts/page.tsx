@@ -35,6 +35,7 @@ import type {
   ReceiptStatus,
   ReviewedFieldUpdates,
   ReceiptAssignmentStatus,
+  ReceiptReview,
 } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
@@ -228,6 +229,8 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [receiptReviews, setReceiptReviews] = useState<ReceiptReview[] | null>(null)
+  const [reviewsLoading, setReviewsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ReceiptStatus | "all">("all")
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({})
@@ -236,6 +239,7 @@ export default function ReceiptsPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [reviewActionLoading, setReviewActionLoading] = useState<string | null>(null)
   const [ocrLoadingId, setOcrLoadingId] = useState<string | null>(null)
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const pageStart = (page - 1) * PAGE_SIZE + (receipts.length === 0 ? 0 : 1)
@@ -344,6 +348,46 @@ export default function ReceiptsPage() {
   useEffect(() => {
     fetchReceipts()
   }, [fetchReceipts])
+
+  useEffect(() => {
+    const receiptId = selectedReceipt?.id
+
+    if (!dialogOpen || !receiptId) {
+      setReceiptReviews(null)
+      setReviewsError(null)
+      setReviewsLoading(false)
+      return
+    }
+
+    let isActive = true
+
+    const fetchReviews = async () => {
+      setReviewsLoading(true)
+      setReviewsError(null)
+      const { data, error } = await supabase
+        .from("receipt_reviews")
+        .select("action, comment, created_at, reviewer:reviewer_id(email)")
+        .eq("receipt_id", receiptId)
+        .order("created_at", { ascending: false })
+
+      if (!isActive) return
+
+      if (error) {
+        console.error("Failed to fetch receipt reviews", error)
+        setReviewsError("Unable to load review history.")
+        setReceiptReviews([])
+      } else {
+        setReceiptReviews(data ?? [])
+      }
+      setReviewsLoading(false)
+    }
+
+    fetchReviews()
+
+    return () => {
+      isActive = false
+    }
+  }, [dialogOpen, selectedReceipt?.id, supabase])
 
   const handleReview = useCallback(
     async (receipt: Receipt, approved: boolean, payload: ReviewActionPayload) => {
@@ -695,6 +739,9 @@ export default function ReceiptsPage() {
           !!selectedReceipt && reviewActionLoading === selectedReceipt.id
         }
         reRunLoading={!!selectedReceipt && ocrLoadingId === selectedReceipt.id}
+        reviews={receiptReviews ?? []}
+        reviewsLoading={reviewsLoading}
+        reviewsError={reviewsError}
       />
     </div>
   )
