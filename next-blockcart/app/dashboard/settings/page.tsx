@@ -92,6 +92,23 @@ export default function SettingsPage() {
   const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null)
   const [maintenanceUpdating, setMaintenanceUpdating] = useState(false)
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refreshSettings = async () => {
+    setRefreshing(true)
+    try {
+      const data = await fetchAdminSettings()
+      setSettings(data)
+      setError(null)
+      return true
+    } catch (err) {
+      console.error("Failed to refresh admin settings", err)
+      setError("Unable to refresh settings. Displaying cached values.")
+      return false
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     if (!isAdmin || guardLoading) {
@@ -111,7 +128,7 @@ export default function SettingsPage() {
       } catch (err) {
         console.error("Failed to load admin settings", err)
         if (isMounted) {
-          setError("Unable to load the latest settings. Showing cached values.")
+          setError("Unable to load the latest settings.")
         }
       } finally {
         if (isMounted) {
@@ -160,25 +177,19 @@ export default function SettingsPage() {
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
     setRoleUpdatingId(userId)
-    const success = await updateReviewerRole(userId, role)
-
-    if (success) {
-      setSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              reviewers: prev.reviewers.map((reviewer) =>
-                reviewer.id === userId ? { ...reviewer, role } : reviewer,
-              ),
-            }
-          : prev,
-      )
+    try {
+      await updateReviewerRole(userId, role)
+      await refreshSettings()
       setBanner({ type: "success", message: "Reviewer role updated." })
-    } else {
-      setBanner({ type: "error", message: "Unable to update reviewer role." })
+    } catch (err) {
+      console.error("Failed to update reviewer role", err)
+      setBanner({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to update reviewer role.",
+      })
+    } finally {
+      setRoleUpdatingId(null)
     }
-
-    setRoleUpdatingId(null)
   }
 
   const handleInvite = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -188,33 +199,20 @@ export default function SettingsPage() {
     }
 
     setInviteLoading(true)
-    const success = await inviteReviewer(inviteEmail)
-
-    if (success) {
-      setSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              reviewers: [
-                {
-                  id: `invited-${Date.now()}`,
-                  email: inviteEmail,
-                  fullName: inviteEmail,
-                  role: "reviewer",
-                  status: "invited",
-                },
-                ...prev.reviewers,
-              ],
-            }
-          : prev,
-      )
+    try {
+      const reviewer = await inviteReviewer(inviteEmail)
       setInviteEmail("")
-      setBanner({ type: "success", message: "Invitation sent to reviewer." })
-    } else {
-      setBanner({ type: "error", message: "Unable to send reviewer invitation." })
+      setBanner({ type: "success", message: `Invitation sent to ${reviewer.email}.` })
+      await refreshSettings()
+    } catch (err) {
+      console.error("Failed to invite reviewer", err)
+      setBanner({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to send reviewer invitation.",
+      })
+    } finally {
+      setInviteLoading(false)
     }
-
-    setInviteLoading(false)
   }
 
   const handleMaintenanceToggle = async (enabled: boolean) => {
@@ -223,55 +221,50 @@ export default function SettingsPage() {
     }
 
     setMaintenanceUpdating(true)
-    const success = await setMaintenanceMode(enabled)
-
-    if (success) {
-      setSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              environment: {
-                ...prev.environment,
-                maintenanceMode: enabled,
-                lastMaintenanceAt: enabled ? new Date().toISOString() : prev.environment.lastMaintenanceAt,
-              },
-            }
-          : prev,
-      )
+    try {
+      const environment = await setMaintenanceMode(enabled)
+      setSettings((prev) => (prev ? { ...prev, environment } : prev))
+      await refreshSettings()
       setBanner({
         type: "success",
         message: enabled ? "Maintenance mode enabled." : "Maintenance mode disabled.",
       })
-    } else {
-      setBanner({ type: "error", message: "Unable to update maintenance mode." })
+    } catch (err) {
+      console.error("Failed to toggle maintenance mode", err)
+      setBanner({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to update maintenance mode.",
+      })
+    } finally {
+      setMaintenanceUpdating(false)
     }
-
-    setMaintenanceUpdating(false)
   }
 
   const handleRunTask = async (taskId: string) => {
     setRunningTaskId(taskId)
-    const success = await triggerMaintenanceTask(taskId)
-
-    if (success) {
+    try {
+      const task = await triggerMaintenanceTask(taskId)
       setSettings((prev) =>
         prev
           ? {
               ...prev,
-              maintenanceTasks: prev.maintenanceTasks.map((task) =>
-                task.id === taskId
-                  ? { ...task, status: "idle", lastRunAt: new Date().toISOString() }
-                  : task,
+              maintenanceTasks: prev.maintenanceTasks.map((existing) =>
+                existing.id === task.id ? task : existing,
               ),
             }
           : prev,
       )
+      await refreshSettings()
       setBanner({ type: "success", message: "Maintenance task triggered." })
-    } else {
-      setBanner({ type: "error", message: "Unable to trigger maintenance task." })
+    } catch (err) {
+      console.error("Failed to run maintenance task", err)
+      setBanner({
+        type: "error",
+        message: err instanceof Error ? err.message : "Unable to trigger maintenance task.",
+      })
+    } finally {
+      setRunningTaskId(null)
     }
-
-    setRunningTaskId(null)
   }
 
   if (guardLoading) {
@@ -313,6 +306,14 @@ export default function SettingsPage() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Showing cached settings</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {refreshing && !loading && (
+        <Alert>
+          <Spinner className="h-4 w-4" />
+          <AlertTitle>Refreshing settings</AlertTitle>
+          <AlertDescription>Loading the latest configuration…</AlertDescription>
         </Alert>
       )}
 

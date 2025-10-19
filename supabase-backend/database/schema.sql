@@ -108,3 +108,32 @@ CREATE TABLE public.web_users (
   CONSTRAINT web_users_pkey PRIMARY KEY (id),
   CONSTRAINT web_users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+
+CREATE TABLE public.maintenance_state (
+  id integer NOT NULL DEFAULT 1,
+  maintenance_mode boolean DEFAULT false,
+  last_maintenance_at timestamp with time zone DEFAULT now(),
+  last_aggregator_sync timestamp with time zone DEFAULT now(),
+  supabase_status text DEFAULT 'operational'::text CHECK (
+    supabase_status = ANY (ARRAY['operational'::text, 'degraded'::text, 'down'::text])
+  ),
+  analytics_status text DEFAULT 'offline'::text CHECK (
+    analytics_status = ANY (ARRAY['operational'::text, 'degraded'::text, 'offline'::text])
+  ),
+  app_version text DEFAULT '0.1.0'::text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT maintenance_state_pkey PRIMARY KEY (id),
+  CONSTRAINT maintenance_state_singleton CHECK (id = 1)
+);
+
+CREATE TABLE public.maintenance_tasks (
+  id text NOT NULL,
+  name text NOT NULL,
+  description text,
+  last_run_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'idle'::text CHECK (
+    status = ANY (ARRAY['idle'::text, 'running'::text, 'error'::text])
+  ),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT maintenance_tasks_pkey PRIMARY KEY (id)
+);
