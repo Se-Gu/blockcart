@@ -50,8 +50,23 @@ CREATE TABLE public.receipts (
   receipt_time time without time zone,
   CONSTRAINT receipts_pkey PRIMARY KEY (id),
   CONSTRAINT receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT receipts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id)
+  CONSTRAINT receipts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.web_users(id)
 );
+CREATE TABLE public.receipt_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  receipt_id uuid NOT NULL,
+  reviewer_id uuid NOT NULL,
+  status text DEFAULT 'assigned'::text CHECK (status = ANY (ARRAY['assigned'::text, 'completed'::text, 'returned'::text])),
+  assigned_at timestamp with time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  released_at timestamp with time zone,
+  CONSTRAINT receipt_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT receipt_assignments_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id) ON DELETE CASCADE,
+  CONSTRAINT receipt_assignments_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX receipt_assignments_one_active
+  ON public.receipt_assignments (receipt_id)
+  WHERE status = 'assigned'::text AND released_at IS NULL;
 CREATE TABLE public.referrals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   referrer uuid,
@@ -96,3 +111,19 @@ CREATE TABLE public.web_users (
   CONSTRAINT web_users_pkey PRIMARY KEY (id),
   CONSTRAINT web_users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+CREATE VIEW public.web_user_profiles WITH (security_invoker=true) AS
+SELECT
+  wu.id,
+  wu.role,
+  wu.created_at,
+  wu.updated_at,
+  au.email,
+  (au.raw_user_meta_data ->> 'full_name')::text AS full_name
+FROM public.web_users wu
+JOIN auth.users au ON au.id = wu.id;
+CREATE VIEW public.mobile_users WITH (security_invoker=true) AS
+SELECT
+  u.*
+FROM public.users u
+LEFT JOIN public.web_users wu ON wu.id = u.id
+WHERE wu.id IS NULL;

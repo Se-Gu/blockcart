@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Search, Filter, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -29,7 +30,12 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { ReceiptDetailDialog } from "@/components/receipt-detail-dialog"
-import type { Receipt, ReceiptStatus, ReviewedFieldUpdates } from "@/lib/types"
+import type {
+  Receipt,
+  ReceiptStatus,
+  ReviewedFieldUpdates,
+  ReceiptAssignmentStatus,
+} from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
@@ -40,6 +46,13 @@ interface SupabaseUserRow {
   id: string
   email: string | null
   full_name?: string | null
+}
+
+interface SupabaseWebUserRow {
+  id: string
+  email: string | null
+  full_name?: string | null
+  role?: string | null
 }
 
 interface SupabaseReceiptRow {
@@ -60,17 +73,22 @@ interface SupabaseReceiptRow {
   reviewed_fields?: Record<string, unknown> | null
   extracted_fields?: Record<string, unknown> | null
   users?: SupabaseUserRow | null
-  reviewer?: SupabaseUserRow | null
+}
+
+interface SupabaseReceiptAssignmentRow {
+  id: string
+  status: ReceiptAssignmentStatus
+  assigned_at: string
+  completed_at?: string | null
+  released_at?: string | null
+  reviewer_id: string
+  reviewer?: SupabaseWebUserRow | null
+  receipt: SupabaseReceiptRow
 }
 
 interface ReviewActionPayload {
   reviewedFields: ReviewedFieldUpdates
   comment: string
-}
-
-interface ReviewerOption {
-  id: string
-  label: string
 }
 
 const statusStyles: Record<ReceiptStatus, string> = {
@@ -82,31 +100,32 @@ const statusStyles: Record<ReceiptStatus, string> = {
   error: "bg-destructive/10 text-destructive hover:bg-destructive/20",
 }
 
-function transformReceiptRow(row: SupabaseReceiptRow): Receipt {
+function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
+  const receipt = row.receipt
+
   const totalNumber =
-    typeof row.total === "number"
-      ? Number(row.total)
-      : row.total
-      ? Number(row.total)
+    typeof receipt.total === "number"
+      ? Number(receipt.total)
+      : receipt.total
+      ? Number(receipt.total)
       : 0
 
-  const reviewerName =
-    row.reviewer?.full_name || row.reviewer?.email || row.reviewed_by || null
+  const reviewedFields = receipt.reviewed_fields ?? null
+  const extractedFields = receipt.extracted_fields ?? null
 
-  const reviewerEmail = row.reviewer?.email || null
+  const assignmentReviewerName =
+    row.reviewer?.full_name || row.reviewer?.email || null
 
-  const userEmail = row.users?.email || null
-  const userName = row.users?.full_name || userEmail || row.user_id || "Unknown user"
+  const userEmail = receipt.users?.email || null
+  const userName =
+    receipt.users?.full_name || userEmail || receipt.user_id || "Unknown user"
 
-  const reviewedFields = row.reviewed_fields ?? null
-  const extractedFields = row.extracted_fields ?? null
-
-  const purchaseDate = row.receipt_date || row.created_at
+  const purchaseDate = receipt.receipt_date || receipt.created_at
   const location =
     (typeof reviewedFields === "object" && reviewedFields && "location" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).location
       : undefined) ??
-    row.location ??
+    receipt.location ??
     (typeof extractedFields === "object" && extractedFields && "location" in extractedFields
       ? (extractedFields as Record<string, unknown>).location
       : undefined)
@@ -115,7 +134,7 @@ function transformReceiptRow(row: SupabaseReceiptRow): Receipt {
     (typeof reviewedFields === "object" && reviewedFields && "store" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).store
       : undefined) ??
-    row.store ??
+    receipt.store ??
     (typeof extractedFields === "object" && extractedFields && "store" in extractedFields
       ? (extractedFields as Record<string, unknown>).store
       : undefined)
@@ -124,7 +143,7 @@ function transformReceiptRow(row: SupabaseReceiptRow): Receipt {
     (typeof reviewedFields === "object" && reviewedFields && "payment_method" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).payment_method
       : undefined) ??
-    row.payment_method ??
+    receipt.payment_method ??
     (typeof extractedFields === "object" && extractedFields && "payment_method" in extractedFields
       ? (extractedFields as Record<string, unknown>).payment_method
       : undefined)
@@ -133,33 +152,44 @@ function transformReceiptRow(row: SupabaseReceiptRow): Receipt {
     (typeof reviewedFields === "object" && reviewedFields && "receipt_time" in reviewedFields
       ? (reviewedFields as Record<string, unknown>).receipt_time
       : undefined) ??
-    row.receipt_time ??
+    receipt.receipt_time ??
     (typeof extractedFields === "object" && extractedFields && "receipt_time" in extractedFields
       ? (extractedFields as Record<string, unknown>).receipt_time
       : undefined)
 
+  const reviewerEmail = row.reviewer?.email || null
+
+  const reviewerName = assignmentReviewerName
+
   return {
-    id: row.id,
-    user_id: row.user_id,
+    id: receipt.id,
+    user_id: receipt.user_id,
     user_email: userEmail,
     user_name: userName,
-    image_url: row.image_url,
+    image_url: receipt.image_url,
     total_amount: Number.isFinite(totalNumber) ? totalNumber : 0,
-    store_name: typeof storeName === "string" ? storeName : row.store,
+    store_name: typeof storeName === "string" ? storeName : receipt.store,
     purchase_date: purchaseDate,
-    status: row.status,
-    reviewer_id: row.reviewed_by ?? null,
+    status: receipt.status,
+    reviewer_id: receipt.reviewed_by ?? row.reviewer_id ?? null,
     reviewer_name: typeof reviewerName === "string" ? reviewerName : null,
     reviewer_email: reviewerEmail,
-    reviewed_at: row.updated_at ?? null,
-    rejection_reason: row.rejection_reason ?? null,
-    created_at: row.created_at,
-    location: typeof location === "string" ? location : row.location ?? null,
+    reviewed_at: receipt.updated_at ?? null,
+    rejection_reason: receipt.rejection_reason ?? null,
+    created_at: receipt.created_at,
+    location: typeof location === "string" ? location : receipt.location ?? null,
     payment_method:
-      typeof paymentMethod === "string" ? paymentMethod : row.payment_method ?? null,
-    receipt_time: typeof receiptTime === "string" ? receiptTime : row.receipt_time ?? null,
+      typeof paymentMethod === "string"
+        ? paymentMethod
+        : receipt.payment_method ?? null,
+    receipt_time:
+      typeof receiptTime === "string" ? receiptTime : receipt.receipt_time ?? null,
     reviewed_fields: reviewedFields,
     extracted_fields: extractedFields,
+    assignment_id: row.id,
+    assignment_status: row.status,
+    assigned_at: row.assigned_at,
+    assignment_completed_at: row.completed_at ?? null,
   }
 }
 
@@ -191,17 +221,16 @@ function formatDateTime(value?: string | null) {
 
 export default function ReceiptsPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), [])
-  const { user } = useAuth()
+  const { user, userRole, loading } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
 
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ReceiptStatus | "all">("all")
-  const [reviewerFilter, setReviewerFilter] = useState<string | "all">("all")
   const [dateRange, setDateRange] = useState<{ from?: string; to?: string }>({})
-  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -217,63 +246,51 @@ export default function ReceiptsPage() {
     return `Showing ${pageStart}-${pageEnd} of ${totalCount}`
   })()
 
-  const fetchReviewers = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id,email")
-        .order("email", { ascending: true })
-
-      if (error) throw error
-
-      const options = (data ?? []).map((row) => ({
-        id: row.id,
-        label: row.email ?? row.id,
-      }))
-
-      setReviewerOptions(options)
-    } catch (error) {
-      console.error("Failed to load reviewers", error)
-      toast({
-        variant: "destructive",
-        title: "Unable to load reviewers",
-        description: error instanceof Error ? error.message : "Unknown error",
-      })
-    }
-  }, [supabase, toast])
-
   const fetchReceipts = useCallback(async () => {
+    if (loading) {
+      return
+    }
+
+    if (!user || userRole !== "reviewer") {
+      setReceipts([])
+      setTotalCount(0)
+      setIsLoading(false)
+      return
+    }
+
     setIsLoading(true)
     try {
       let query = supabase
-        .from("receipts")
+        .from("receipt_assignments")
         .select(
-          `id,user_id,image_url,store,total,receipt_date,status,created_at,updated_at,location,payment_method,receipt_time,reviewed_by,rejection_reason,reviewed_fields,extracted_fields,users:user_id(id,email),reviewer:reviewed_by(id,email)`,
+          `id,status,assigned_at,completed_at,released_at,reviewer_id,reviewer:web_user_profiles(id,email,full_name,role),receipt:receipts(
+            id,user_id,image_url,store,total,receipt_date,status,created_at,updated_at,location,payment_method,receipt_time,reviewed_by,rejection_reason,reviewed_fields,extracted_fields,
+            users:user_id(id,email,full_name)
+          )`,
           { count: "exact" },
         )
-        .order("created_at", { ascending: false })
+        .eq("reviewer_id", user.id)
+        .eq("status", "assigned")
+        .is("released_at", null)
+        .order("created_at", { referencedTable: "receipts", ascending: false })
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
 
       if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter)
-      }
-
-      if (reviewerFilter !== "all") {
-        query = query.eq("reviewed_by", reviewerFilter)
+        query = query.eq("receipts.status", statusFilter)
       }
 
       if (dateRange.from) {
-        query = query.gte("receipt_date", dateRange.from)
+        query = query.gte("receipts.receipt_date", dateRange.from)
       }
 
       if (dateRange.to) {
-        query = query.lte("receipt_date", dateRange.to)
+        query = query.lte("receipts.receipt_date", dateRange.to)
       }
 
       if (searchQuery.trim()) {
         const term = `%${searchQuery.trim()}%`
         query = query.or(
-          `id.ilike.${term},store.ilike.${term},location.ilike.${term},rejection_reason.ilike.${term}`,
+          `receipts.id.ilike.${term},receipts.store.ilike.${term},receipts.location.ilike.${term},receipts.rejection_reason.ilike.${term}`,
         )
       }
 
@@ -281,7 +298,9 @@ export default function ReceiptsPage() {
 
       if (error) throw error
 
-      const mapped = (data ?? []).map((row) => transformReceiptRow(row as SupabaseReceiptRow))
+      const mapped = (data ?? []).map((row) =>
+        transformReceiptRow(row as unknown as SupabaseReceiptAssignmentRow),
+      )
 
       setReceipts(mapped)
       setTotalCount(count ?? 0)
@@ -299,11 +318,28 @@ export default function ReceiptsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, page, statusFilter, reviewerFilter, dateRange.from, dateRange.to, searchQuery, toast])
+  }, [
+    dateRange.from,
+    dateRange.to,
+    loading,
+    page,
+    searchQuery,
+    statusFilter,
+    supabase,
+    toast,
+    user?.id,
+    userRole,
+  ])
 
   useEffect(() => {
-    fetchReviewers()
-  }, [fetchReviewers])
+    if (loading) {
+      return
+    }
+
+    if (userRole === "admin") {
+      router.replace("/dashboard")
+    }
+  }, [loading, router, userRole])
 
   useEffect(() => {
     fetchReceipts()
@@ -311,11 +347,11 @@ export default function ReceiptsPage() {
 
   const handleReview = useCallback(
     async (receipt: Receipt, approved: boolean, payload: ReviewActionPayload) => {
-      if (!user) {
+      if (!user || userRole !== "reviewer") {
         toast({
           variant: "destructive",
-          title: "You must be signed in",
-          description: "Sign in to review receipts.",
+          title: "You are not allowed to review",
+          description: "Only assigned reviewers can process receipts.",
         })
         return
       }
@@ -326,6 +362,8 @@ export default function ReceiptsPage() {
       const reviewerDisplay =
         (user.user_metadata as { full_name?: string })?.full_name || user.email || user.id
 
+      const completionTime = new Date().toISOString()
+
       const optimisticReceipt: Receipt = {
         ...receipt,
         status: approved ? "approved" : "rejected",
@@ -335,6 +373,8 @@ export default function ReceiptsPage() {
         reviewed_at: new Date().toISOString(),
         rejection_reason: approved ? null : payload.comment || null,
         reviewed_fields: payload.reviewedFields,
+        assignment_status: "completed",
+        assignment_completed_at: completionTime,
       }
 
       setReceipts((prev) => prev.map((item) => (item.id === receipt.id ? optimisticReceipt : item)))
@@ -465,7 +505,7 @@ export default function ReceiptsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <div className="relative flex-1 md:col-span-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -497,27 +537,7 @@ export default function ReceiptsPage() {
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
-
-        <Select
-          value={reviewerFilter}
-          onValueChange={(value) => {
-            setReviewerFilter(value as string | "all")
-            setPage(1)
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Filter by reviewer" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Reviewers</SelectItem>
-            {reviewerOptions.map((reviewer) => (
-              <SelectItem key={reviewer.id} value={reviewer.id}>
-                {reviewer.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          </Select>
 
         <div className="grid gap-2 md:col-span-2 lg:col-span-1">
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -574,7 +594,7 @@ export default function ReceiptsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isLoading || loading ? (
               <TableRow>
                 <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
                   <div className="flex items-center justify-center gap-2">

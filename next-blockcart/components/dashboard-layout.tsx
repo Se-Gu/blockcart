@@ -42,7 +42,6 @@ interface DashboardLayoutProps {
 
 const adminNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/receipts", label: "Receipts", icon: Receipt },
   { href: "/dashboard/users", label: "Users", icon: Users },
   { href: "/dashboard/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/dashboard/rewards", label: "Rewards", icon: Gift },

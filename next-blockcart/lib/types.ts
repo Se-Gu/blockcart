@@ -8,6 +8,11 @@ export type ReceiptStatus =
   | "flagged"
   | "error"
 
+export type ReceiptAssignmentStatus =
+  | "assigned"
+  | "completed"
+  | "returned"
+
 export interface User {
   id: string
   email: string
@@ -43,6 +48,10 @@ export interface Receipt {
   receipt_time?: string | null
   reviewed_fields?: Record<string, unknown> | null
   extracted_fields?: Record<string, unknown> | null
+  assignment_id?: string | null
+  assignment_status?: ReceiptAssignmentStatus | null
+  assigned_at?: string | null
+  assignment_completed_at?: string | null
 }
 
 export interface ReviewedFieldUpdates {

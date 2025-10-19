@@ -201,9 +201,11 @@ export function ReceiptDetailDialog({
   const mergedOcrLoading = reRunLoading || localOcrLoading
   const approveButtonBusy = activeAction === "approve"
   const rejectButtonBusy = activeAction === "reject"
+  const assignmentLocked =
+    !!receipt?.assignment_status && receipt.assignment_status !== "assigned"
 
   const handleApprove = async () => {
-    if (!receipt) return
+    if (!receipt || assignmentLocked) return
     setActiveAction("approve")
     try {
       await onApprove?.(receipt, {
@@ -216,7 +218,7 @@ export function ReceiptDetailDialog({
   }
 
   const handleReject = async () => {
-    if (!receipt || !comment.trim()) return
+    if (!receipt || !comment.trim() || assignmentLocked) return
     setActiveAction("reject")
     try {
       await onReject?.(receipt, {
@@ -434,7 +436,7 @@ export function ReceiptDetailDialog({
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     onClick={handleApprove}
-                    disabled={mergedActionLoading}
+                    disabled={mergedActionLoading || assignmentLocked}
                     className="flex-1 bg-green-600 hover:bg-green-700"
                   >
                     {approveButtonBusy ? (
@@ -446,7 +448,9 @@ export function ReceiptDetailDialog({
                   </Button>
                   <Button
                     onClick={handleReject}
-                    disabled={mergedActionLoading || !comment.trim()}
+                    disabled={
+                      mergedActionLoading || !comment.trim() || assignmentLocked
+                    }
                     variant="destructive"
                     className="flex-1"
                   >
