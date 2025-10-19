@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { User, Session } from "@supabase/supabase-js";
+import type { UserRole } from "@/lib/types";
 
 let client: ReturnType<typeof createBrowserClient> | null = null;
 
@@ -57,4 +58,19 @@ export async function getCurrentSession(): Promise<Session | null> {
     data: { session },
   } = await supabase.auth.getSession();
   return session;
+}
+
+export async function getUserRole(userId: string): Promise<UserRole | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data?.role as UserRole | undefined) ?? null;
 }

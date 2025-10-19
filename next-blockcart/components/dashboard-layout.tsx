@@ -17,16 +17,27 @@ import {
   LogOut,
   Menu,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
   userRole: UserRole;
   userEmail: string;
+  userName: string;
 }
 
 const adminNavItems = [
@@ -50,11 +61,14 @@ export function DashboardLayout({
   children,
   userRole,
   userEmail,
+  userName,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { signOut } = useAuth();
   const navItems = userRole === "admin" ? adminNavItems : reviewerNavItems;
+  const displayName = userName || userEmail;
+  const userInitial = (displayName?.[0] ?? "").toUpperCase() || "?";
 
   const handleLogout = async () => {
     try {
@@ -123,10 +137,13 @@ export function DashboardLayout({
           <div className="border-t border-border p-4">
             <div className="mb-3 flex items-center gap-3 px-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                {userEmail[0].toUpperCase()}
+                {userInitial}
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="truncate text-sm font-medium text-foreground">
+                  {displayName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
                   {userEmail}
                 </p>
                 <p className="text-xs text-muted-foreground capitalize">
@@ -140,7 +157,7 @@ export function DashboardLayout({
               onClick={handleLogout}
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              Sign out
             </Button>
           </div>
         </div>
@@ -159,6 +176,58 @@ export function DashboardLayout({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center gap-3 rounded-full border border-border px-2 py-1.5 text-left shadow-sm transition-colors hover:bg-accent/60 focus-visible:ring-0"
+              >
+                <Avatar>
+                  <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden min-w-0 flex-col items-start sm:flex">
+                  <span className="max-w-[140px] truncate text-sm font-medium text-foreground">
+                    {displayName}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {userEmail}
+                  </span>
+                </div>
+                <span className="hidden text-xs capitalize text-muted-foreground sm:block">
+                  {userRole}
+                </span>
+                <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="flex flex-col gap-1">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {displayName}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {userEmail}
+                  </span>
+                  <span className="text-xs capitalize text-muted-foreground">
+                    {userRole}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void handleLogout();
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         {/* Page content */}

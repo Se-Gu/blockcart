@@ -1,23 +1,93 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { User, UserRole } from "@/lib/types"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
+
+type ReceiptActivity = {
+  id: string
+  status?: string | null
+  created_at?: string | null
+  receipt_date?: string | null
+  store?: string | null
+  store_name?: string | null
+  total?: number | null
+  total_amount?: number | null
+}
 
 interface UserDetailDialogProps {
   user: User | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onUpdateRole?: (userId: string, role: UserRole) => void
+  onUpdateRole?: (userId: string, role: UserRole) => Promise<void>
 }
 
 export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: UserDetailDialogProps) {
   const [selectedRole, setSelectedRole] = useState<UserRole>(user?.role || "reviewer")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [recentReceipts, setRecentReceipts] = useState<ReceiptActivity[]>([])
+  const [isLoadingReceipts, setIsLoadingReceipts] = useState(false)
+  const [receiptsError, setReceiptsError] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (user) {
+      setSelectedRole(user.role)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !open) {
+      setRecentReceipts([])
+      setReceiptsError(null)
+      return
+    }
+
+    let isMounted = true
+    const supabase = getSupabaseBrowserClient()
+
+    const loadReceipts = async () => {
+      setIsLoadingReceipts(true)
+      setReceiptsError(null)
+
+      const { data, error } = await supabase
+        .from("receipts")
+        .select("id, status, created_at, receipt_date, store, store_name, total, total_amount")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      if (!isMounted) return
+
+      if (error) {
+        console.error("Failed to load recent receipts", error)
+        const message = error instanceof Error ? error.message : "Unable to load receipts"
+        setReceiptsError(message)
+        toast({
+          title: "Failed to load receipts",
+          description: message,
+          variant: "destructive",
+        })
+        setRecentReceipts([])
+      } else {
+        setRecentReceipts(data ?? [])
+      }
+
+      setIsLoadingReceipts(false)
+    }
+
+    loadReceipts()
+
+    return () => {
+      isMounted = false
+    }
+  }, [open, user?.id])
 
   if (!user) return null
 
@@ -28,10 +98,36 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
     }
 
     setIsSubmitting(true)
-    await onUpdateRole?.(user.id, selectedRole)
-    setIsSubmitting(false)
-    onOpenChange(false)
+    try {
+      await onUpdateRole?.(user.id, selectedRole)
+      toast({
+        title: "Role updated",
+        description: `${user.email} is now ${selectedRole}.`,
+      })
+      onOpenChange(false)
+    } catch (error) {
+      console.error("Failed to update role", error)
+      const message = error instanceof Error ? error.message : "Something went wrong"
+      toast({
+        title: "Failed to update role",
+        description: message,
+        variant: "destructive",
+      })
+      setSelectedRole(user.role)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", {
+        maximumFractionDigits: 2,
+      }),
+    []
+  )
+
+  const lifetimeTokens = user.lifetime_tokens ?? user.total_rewards ?? 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -44,13 +140,27 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
           <div className="space-y-4">
             <div>
               <Label className="text-muted-foreground">Full Name</Label>
-              <p className="text-sm font-medium">{user.full_name}</p>
+              <p className="text-sm font-medium">{user.full_name || "—"}</p>
             </div>
 
             <div>
               <Label className="text-muted-foreground">Email</Label>
               <p className="text-sm font-medium">{user.email}</p>
             </div>
+
+            {user.wallet_address && (
+              <div>
+                <Label className="text-muted-foreground">Wallet Address</Label>
+                <p className="font-mono text-xs sm:text-sm break-all">{user.wallet_address}</p>
+              </div>
+            )}
+
+            {user.referral_code && (
+              <div>
+                <Label className="text-muted-foreground">Referral Code</Label>
+                <p className="text-sm font-medium">{user.referral_code}</p>
+              </div>
+            )}
 
             <div>
               <Label className="text-muted-foreground">Current Role</Label>
@@ -86,6 +196,66 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
                 </p>
               </div>
             )}
+          </div>
+
+          <div className="space-y-3 border-t border-border pt-4">
+            <div>
+              <Label className="text-muted-foreground">Lifetime Tokens</Label>
+              <p className="text-sm font-medium">{numberFormatter.format(lifetimeTokens)}</p>
+            </div>
+
+            <div>
+              <Label className="text-muted-foreground">Recent Receipts</Label>
+              <div className="mt-2 space-y-2">
+                {isLoadingReceipts ? (
+                  <p className="text-sm text-muted-foreground">Loading receipts...</p>
+                ) : receiptsError ? (
+                  <p className="text-sm text-destructive">{receiptsError}</p>
+                ) : recentReceipts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recent receipts</p>
+                ) : (
+                  recentReceipts.map((receipt) => {
+                    const amount =
+                      typeof receipt.total === "number"
+                        ? receipt.total
+                        : typeof receipt.total_amount === "number"
+                          ? receipt.total_amount
+                          : Number(receipt.total ?? receipt.total_amount)
+                    const storeName =
+                      (receipt as { store_name?: string | null }).store_name ??
+                      (receipt as { store?: string | null }).store ??
+                      "Unknown store"
+                    const displayDate = receipt.receipt_date ?? receipt.created_at
+
+                    return (
+                      <div
+                        key={receipt.id}
+                        className="rounded-md border border-border p-3 text-sm"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{storeName}</p>
+                          {receipt.status && (
+                            <Badge variant="outline" className="capitalize">
+                              {receipt.status}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>
+                            {displayDate
+                              ? new Date(displayDate).toLocaleDateString()
+                              : "Date unavailable"}
+                          </span>
+                          <span>
+                            {Number.isFinite(amount) ? numberFormatter.format(Number(amount)) : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2 border-t border-border pt-4">
