@@ -1,17 +1,26 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import {
   getSupabaseBrowserClient,
   getCurrentUser,
   getCurrentSession,
+  getUserRole,
 } from "./supabase/client";
 import { useRouter } from "next/navigation";
+import type { UserRole } from "@/lib/types";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  userRole: UserRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -22,8 +31,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const resolveUserRole = useCallback(
+    async (currentUser: User | null, context = "unknown") => {
+      if (!currentUser) {
+        setUserRole(null);
+        return;
+      }
+
+      const metadataRole =
+        (currentUser.user_metadata?.role as UserRole | undefined) ?? null;
+
+      try {
+        const dbRole = await getUserRole(currentUser.id);
+        setUserRole(dbRole ?? metadataRole ?? null);
+      } catch (roleError) {
+        console.error(`Error fetching user role (${context}):`, roleError);
+        setUserRole(metadataRole ?? null);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     // Get initial session
@@ -36,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(userData);
         setSession(sessionData);
+        await resolveUserRole(userData, "initial load");
       } catch (error) {
         console.error("Error getting session:", error);
       } finally {
@@ -50,9 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setLoading(true);
+      const currentUser = session?.user ?? null;
       console.log("Auth state changed:", event, session?.user?.email);
-      setUser(session?.user ?? null);
+      setUser(currentUser);
       setSession(session);
+
+      await resolveUserRole(currentUser, "auth state change");
       setLoading(false);
 
       if (event === "SIGNED_OUT") {
@@ -63,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [resolveUserRole, router]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
@@ -77,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userData && sessionData) {
         setUser(userData);
         setSession(sessionData);
+        await resolveUserRole(userData, "sign in");
       }
     } catch (error) {
       console.error("Sign in error:", error);
@@ -92,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await getSupabaseBrowserClient().auth.signOut();
       setUser(null);
       setSession(null);
+      setUserRole(null);
     } catch (error) {
       console.error("Sign out error:", error);
       throw error;
@@ -103,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     session,
+    userRole,
     loading,
     signIn,
     signOut,
