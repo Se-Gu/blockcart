@@ -2,9 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  const response = NextResponse.next();
+  const url = request.nextUrl.clone();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,77 +14,34 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
         },
       },
     }
   );
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  console.log(
-    "Middleware - pathname:",
-    request.nextUrl.pathname,
-    "user:",
-    user?.email
-  );
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith("/login");
 
-  // Redirect to login if not authenticated
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
-    console.log("No user found, redirecting to login");
-    const url = request.nextUrl.clone();
+  if (!session && !isAuthRoute) {
     url.pathname = "/login";
+    url.searchParams.set("redirectedFrom", pathname);
     return NextResponse.redirect(url);
   }
 
-  // If user is authenticated, check if they exist in web_users table
-  if (user) {
-    const { data: webUser, error } = await supabase
-      .from("web_users")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Error checking web_users table:", error);
-      // On error, redirect to login for safety
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
-    }
-
-    if (!webUser) {
-      console.log("User not found in web_users table, redirecting to login");
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("access_denied", "true");
-      return NextResponse.redirect(url);
-    }
-
-    console.log("User found in web_users table, access granted");
-  }
-
-  // Redirect to dashboard if authenticated and on login page
-  if (user && request.nextUrl.pathname === "/login") {
-    console.log(
-      "User authenticated and in web_users, redirecting to dashboard"
-    );
-    const url = request.nextUrl.clone();
+  if (session && isAuthRoute) {
     url.pathname = "/dashboard";
+    url.searchParams.delete("redirectedFrom");
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return response;
 }
 
 export const config = {
