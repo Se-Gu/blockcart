@@ -68,53 +68,160 @@ function MyComponent() {
 - **Expo Image Picker** for camera/gallery access
 - **Expo Notifications** for push notifications
 
-## Getting Started
+## Prerequisites
 
-1. Install dependencies:
+- **Node.js** 18+ installed
+- **Expo CLI** installed globally: `npm install -g @expo/cli`
+- **Supabase Account** with a project set up
+- **Mobile Device** (for testing) or **Expo Go** app installed
+
+## Installation
+
+1. **Install dependencies:**
 
    ```bash
    npm install
    ```
 
-2. Set up environment variables:
+2. **Set up environment variables:**
 
-   ```bash
-   cp .env.local.example .env.local
-   # Add your Supabase URL and API key
+   Create a `.env` file in the root directory:
+
+   ```env
+   EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
 
-3. **Configure Supabase Row Level Security (RLS)**:
+   You can find these values in your Supabase Dashboard under **Settings > API**.
 
-   Before running the app, you must set up RLS policies in your Supabase database:
+3. **Set up the backend (Required):**
 
-   - Open your Supabase Dashboard
-   - Navigate to: **SQL Editor**
-   - Copy the contents of `SUPABASE_RLS_SETUP.sql`
-   - Paste and run the SQL commands
+   Before running the app, you need to set up the Supabase backend:
 
-   This step is **required** to allow the app to access the database. Without RLS policies, you'll get "permission denied" errors.
+   - Follow the setup instructions in `../supabase-backend/README.md`
+   - Ensure the database schema is deployed
+   - Deploy all Edge Functions
+   - Configure Row Level Security (RLS) policies
 
-4. Start the development server:
-   ```bash
-   npx expo start --web
-   ```
+## Running the Application
+
+### Development Mode
+
+```bash
+# Start the development server
+npm start
+
+# Or use Expo CLI directly
+npx expo start
+
+# Start with web support (for web development)
+npx expo start --web
+```
+
+This will start the Metro bundler and show a QR code. You can then:
+
+- **Scan the QR code** with the Expo Go app on your phone
+- **Press 'w'** in the terminal to open in web browser
+- **Press 'a'** for Android emulator
+- **Press 'i'** for iOS simulator
+
+### Platform-specific Commands
+
+```bash
+# Android
+npm run android
+# or
+npx expo start --android
+
+# iOS
+npm run ios
+# or
+npx expo start --ios
+
+# Web only
+npm run web
+# or
+npx expo start --web
+```
+
+### Production Build
+
+```bash
+# Build for production
+npx expo build
+
+# Build for specific platforms
+npx expo build:android
+npx expo build:ios
+```
+
+## Development Workflow
+
+1. **Make changes** to your code
+2. **Save files** - changes will hot-reload automatically
+3. **Test on device** using Expo Go app or simulators
+4. **Debug** using React Native Debugger or console logs
+
+## Common Issues and Solutions
+
+### "Metro bundler process exited" Error
+
+```bash
+# Clear Metro cache
+npx expo start --clear
+
+# Or clear cache manually
+rm -rf node_modules/.cache
+```
+
+### Supabase Connection Issues
+
+- Verify your `.env` file contains correct Supabase credentials
+- Check that your Supabase project is active
+- Ensure Row Level Security policies are properly configured
+- Check network connectivity
+
+### Permission Errors
+
+If you get "permission denied" errors:
+
+1. Ensure RLS policies are set up correctly in Supabase
+2. Check that your user is properly authenticated
+3. Verify API keys in your `.env` file
+
+### Build Issues
+
+```bash
+# Clear all caches
+npx expo start --clear
+rm -rf .expo
+rm -rf node_modules
+npm install
+```
 
 ## Project Structure
 
 ```
-src/
-├── components/          # Reusable UI components
-│   ├── Toast.tsx       # Toast notification component
-│   ├── ToastProvider.tsx # Toast context provider
-│   └── ...
-├── hooks/              # Custom React hooks
-│   └── useErrorHandler.ts # Error handling hook
-├── lib/                # Utility libraries
-│   ├── supabase.ts     # Supabase client configuration
-│   └── errorHandling.ts # Error parsing utilities
-├── screens/            # App screens
-├── navigation/         # Navigation configuration
-└── types.ts           # TypeScript type definitions
+expo-blockcart/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── Toast.tsx       # Toast notification component
+│   │   ├── ToastProvider.tsx # Toast context provider
+│   │   └── ...
+│   ├── hooks/              # Custom React hooks
+│   │   └── useErrorHandler.ts # Error handling hook
+│   ├── lib/                # Utility libraries
+│   │   ├── supabase.ts     # Supabase client configuration
+│   │   ├── errorHandling.ts # Error parsing utilities
+│   │   └── ...
+│   ├── screens/            # App screens
+│   ├── navigation/         # Navigation configuration
+│   ├── context/           # React context providers
+│   ├── theme/             # Theme configuration
+│   └── types.ts           # TypeScript type definitions
+├── assets/                # Images and static assets
+├── App.tsx               # Main app component
+└── package.json          # Dependencies and scripts
 ```
 
 ## Error Handling Best Practices

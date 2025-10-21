@@ -128,26 +128,53 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 }
 ```
 
-## Development
+## Prerequisites
 
-### Prerequisites
+- **Node.js** 18+ installed
+- **npm**, **yarn**, or **pnpm** package manager
+- **Supabase Account** with a project set up
+- **Git** for version control
 
-- Node.js 18+
-- npm or yarn or pnpm
+## Installation
 
-### Installation
+1. **Install dependencies:**
+
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or
+   pnpm install
+   ```
+
+2. **Set up environment variables:**
+
+   Create a `.env.local` file in the root directory:
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   ```
+
+   You can find these values in your Supabase Dashboard under **Settings > API**.
+
+3. **Set up the backend (Required):**
+
+   Before running the dashboard, you need to set up the Supabase backend:
+
+   - Follow the setup instructions in `../supabase-backend/README.md`
+   - Ensure the database schema is deployed
+   - Deploy all Edge Functions
+   - Configure Row Level Security (RLS) policies
+   - Create admin user accounts in the `web_users` table
+
+## Running the Application
+
+### Development Mode
 
 ```bash
-npm install
-# or
-yarn install
-# or
-pnpm install
-```
-
-### Running Locally
-
-```bash
+# Start the development server
 npm run dev
 # or
 yarn dev
@@ -157,21 +184,187 @@ pnpm dev
 
 The application will be available at `http://localhost:3000`.
 
-## Environment Variables
+### Production Mode
 
-Create a `.env.local` file in the root directory:
+```bash
+# Build the application
+npm run build
+# or
+yarn build
+# or
+pnpm build
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+# Start the production server
+npm start
+# or
+yarn start
+# or
+pnpm start
 ```
 
-## Database Schema
+### Additional Commands
 
-The application expects the following Supabase tables:
+```bash
+# Lint the code
+npm run lint
+# or
+yarn lint
+# or
+pnpm lint
 
-- `web_users` - Web dashboard users with roles (admin, reviewer)
-- `receipts` - Receipt submissions
-- `campaigns` - Reward campaigns
-- `rewards` - User rewards
-- `referrals` - Referral tracking
+# Type checking (if using TypeScript)
+npm run type-check
+# or
+yarn type-check
+# or
+pnpm type-check
+```
+
+## Project Structure
+
+```
+next-blockcart/
+├── app/                          # Next.js 13+ app directory
+│   ├── dashboard/                # Admin dashboard pages
+│   │   ├── _components/         # Dashboard components
+│   │   ├── analytics/           # Analytics pages
+│   │   ├── campaigns/           # Campaign management
+│   │   ├── receipts/            # Receipt management
+│   │   ├── referrals/           # Referral tracking
+│   │   ├── rewards/             # Reward management
+│   │   ├── settings/            # Admin settings
+│   │   ├── users/               # User management
+│   │   ├── layout.tsx           # Dashboard layout
+│   │   └── page.tsx             # Main dashboard page
+│   ├── login/                   # Authentication page
+│   ├── globals.css              # Global styles
+│   └── layout.tsx               # Root layout
+├── components/                  # Reusable components
+│   ├── ui/                      # UI component library
+│   ├── dashboard-layout.tsx     # Dashboard layout component
+│   └── ...
+├── hooks/                       # Custom React hooks
+├── lib/                         # Utility libraries
+│   ├── supabase/                # Supabase client configuration
+│   ├── auth-context.tsx         # Authentication context
+│   └── ...
+├── middleware.ts                # Next.js middleware for auth
+├── styles/                      # Additional styles
+└── public/                      # Static assets
+```
+
+## Authentication Setup
+
+The application uses Supabase for authentication with the following features:
+
+- **Email/password authentication**
+- **JWT token management**
+- **Protected routes via middleware**
+- **Role-based access control** (admin, reviewer)
+
+### Creating Admin Users
+
+1. **Via Supabase Dashboard:**
+
+   - Go to **Authentication > Users**
+   - Create users with email/password
+   - Add user roles in the `web_users` table
+
+2. **Via SQL:**
+   ```sql
+   INSERT INTO web_users (id, email, role, created_at)
+   VALUES (gen_random_uuid(), 'admin@example.com', 'admin', NOW());
+   ```
+
+## Database Integration
+
+The application expects the following Supabase tables to be set up:
+
+- **`web_users`**: Admin and reviewer accounts with roles
+- **`receipts`**: Receipt submissions with status tracking
+- **`campaigns`**: Reward campaigns with rules and dates
+- **`rewards`**: User rewards and point balances
+- **`referrals`**: Referral tracking and commission data
+
+See `../supabase-backend/database/schema.sql` for the complete schema.
+
+## Development Workflow
+
+1. **Start the development server** with `npm run dev`
+2. **Make changes** to your code - Next.js will hot-reload automatically
+3. **Test authentication** by creating admin users in Supabase
+4. **Test database operations** using the Supabase Dashboard
+5. **Debug** using browser dev tools or VS Code debugger
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. **Connect your repository** to Vercel
+2. **Set environment variables** in Vercel Dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+3. **Deploy** - Vercel will automatically build and deploy
+
+### Other Platforms
+
+For manual deployment:
+
+```bash
+# Build for production
+npm run build
+
+# The .next folder will be created with optimized build
+```
+
+## Common Issues and Solutions
+
+### Authentication Issues
+
+- **"Invalid login credentials"**: Check user exists in `web_users` table
+- **"Unauthorized" errors**: Verify user role and permissions
+- **Session issues**: Clear browser cookies and try again
+
+### Database Connection Issues
+
+- Verify environment variables are correct
+- Check Supabase project is active
+- Ensure RLS policies allow dashboard access
+- Check network connectivity
+
+### Build Issues
+
+```bash
+# Clear Next.js cache
+rm -rf .next
+npm run build
+
+# Clear node_modules if needed
+rm -rf node_modules
+npm install
+```
+
+### TypeScript Issues
+
+```bash
+# Check types
+npm run type-check
+
+# Fix common TypeScript issues
+npm run lint
+```
+
+## API Routes
+
+The application uses Next.js API routes for server-side operations:
+
+- **Authentication endpoints**
+- **Data fetching for dashboard**
+- **Admin operations**
+
+## Monitoring and Analytics
+
+- **Error monitoring**: Check browser console for client errors
+- **Performance**: Use Next.js built-in analytics
+- **Database**: Monitor through Supabase Dashboard
