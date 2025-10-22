@@ -47,13 +47,12 @@ const adminNavItems = [
   { href: "/dashboard/rewards", label: "Rewards", icon: Gift },
   { href: "/dashboard/referrals", label: "Referrals", icon: UserPlus },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/settings", label: "Platform Settings", icon: Settings },
 ];
 
 const reviewerNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/receipts", label: "Receipts", icon: Receipt },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export function DashboardLayout({

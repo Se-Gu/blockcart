@@ -34,7 +34,6 @@ export default function LoginPage() {
       setAccessDenied(true);
     } else if (user && !loading) {
       // User is authenticated and not loading, redirect to dashboard
-      console.log("User already authenticated, redirecting to dashboard");
       router.push("/dashboard");
     }
   }, [user, loading, router]);
@@ -49,7 +48,6 @@ export default function LoginPage() {
     }
 
     try {
-      console.log("Login attempt:", email);
       await signIn(email, password);
       // Navigation is handled by the auth context onAuthStateChange
     } catch (err: any) {

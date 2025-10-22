@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const router = useRouter();
 
   const resolveUserRole = useCallback((currentUser: User | null, context = "unknown") => {
@@ -65,8 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         setSession(sessionData);
         resolveUserRole(userData, "initial load");
+        setHasInitialized(true);
       } catch (error) {
         console.error("Error getting session:", error);
+        setHasInitialized(true);
       } finally {
         setLoading(false);
       }
@@ -78,10 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event, session?.user?.email);
-      setLoading(true);
+    } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
       const currentUser = session?.user ?? null;
+      console.log("Auth state changed:", event, currentUser?.email, "hasInitialized:", hasInitialized, "currentUser:", currentUser?.id);
+      
+      // Only process if we've initialized (completed initial session load)
+      if (!hasInitialized) {
+        console.log("Not yet initialized, skipping auth state change handler");
+        return;
+      }
+
+      setLoading(true);
       setUser(currentUser);
       setSession(session);
 
@@ -93,13 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("User signed out, redirecting to login");
         router.push("/login");
       } else if (event === "SIGNED_IN" && currentUser) {
-        console.log("User signed in successfully, redirecting to dashboard");
-        router.push("/dashboard");
+        // Don't redirect on SIGNED_IN event - let the page stay where it is
+        // The user is already authenticated, they don't need to be sent to dashboard
+        console.log("User signed in, but not redirecting (user is already authenticated)");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [resolveUserRole, router]);
+  }, [resolveUserRole, router, hasInitialized]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);

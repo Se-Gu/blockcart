@@ -22,15 +22,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  console.log(
-    "Dashboard layout - user:",
-    user?.email,
-    "role:",
-    userRole,
-    "loading:",
-    loading
-  );
-
   useEffect(() => {
     if (loading) {
       return;

@@ -144,27 +144,6 @@ export default function SettingsPage() {
     }
   }, [guardLoading, isAdmin])
 
-  if (guardLoading) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-        <Spinner className="h-6 w-6" />
-        <p>Verifying administrator access…</p>
-      </div>
-    )
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-        <AlertTriangle className="h-5 w-5" />
-        <div className="text-center text-sm">
-          <p className="font-medium text-foreground">Admin access required</p>
-          <p>You do not have permission to manage platform settings.</p>
-        </div>
-      </div>
-    )
-  }
-
   const environmentBadges = useMemo(() => {
     if (!settings) {
       return null
@@ -195,6 +174,27 @@ export default function SettingsPage() {
       },
     }
   }, [settings])
+
+  if (guardLoading) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+        <Spinner className="h-6 w-6" />
+        <p>Verifying administrator access…</p>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+        <AlertTriangle className="h-5 w-5" />
+        <div className="text-center text-sm">
+          <p className="font-medium text-foreground">Admin access required</p>
+          <p>You do not have permission to manage platform settings.</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
     setRoleUpdatingId(userId)
@@ -288,23 +288,11 @@ export default function SettingsPage() {
     }
   }
 
-  if (guardLoading) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-        <Spinner className="h-6 w-6" />
-        <p>Verifying administrator access…</p>
-      </div>
-    )
-  }
-
-  if (!isAdmin) {
-    return null
-  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Platform Settings</h1>
         <p className="text-muted-foreground mt-1">
           Manage reviewer access, environment metadata, and maintenance operations
         </p>

@@ -124,4 +124,31 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* Ensure interactive elements have pointer cursor */
+  button:not([disabled]),
+  [role="button"]:not([aria-disabled="true"]),
+  a:not([disabled]),
+  input[type="submit"]:not([disabled]),
+  input[type="button"]:not([disabled]),
+  input[type="reset"]:not([disabled]),
+  select:not([disabled]),
+  option:not([disabled]),
+  [tabindex]:not([tabindex="-1"]):not([disabled]),
+  details:not([disabled]) > summary,
+  label[for] {
+    cursor: pointer;
+  }
+
+  /* Ensure disabled elements have not-allowed cursor */
+  button[disabled],
+  [role="button"][aria-disabled="true"],
+  a[disabled],
+  input[disabled],
+  select[disabled],
+  option[disabled],
+  textarea[disabled],
+  [tabindex="-1"] {
+    cursor: not-allowed;
+  }
 }
