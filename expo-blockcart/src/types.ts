@@ -6,6 +6,25 @@ export type ReceiptStatus =
   | "flagged"
   | "error";
 
+export type ReceiptItem = {
+  name?: string | null;
+  brand?: string | null;
+  price?: number | null;
+  quantity?: number | null;
+  [key: string]: unknown;
+};
+
+export type ReceiptExtractedFields = {
+  store?: string | null;
+  location?: string | null;
+  date?: string | null;
+  time?: string | null;
+  payment_method?: string | null;
+  total?: number | null;
+  items?: ReceiptItem[] | null;
+  [key: string]: unknown;
+};
+
 export type Receipt = {
   id: string;
   user_id?: string;
@@ -15,11 +34,16 @@ export type Receipt = {
   store: string | null; // Changed from store_name to match schema
   total: number | null;
   status: ReceiptStatus;
-  parsed_json?: Record<string, unknown> | null;
-  extracted_fields?: Record<string, unknown> | null;
+  parsed_json?: Record<string, unknown> | null; // legacy field
+  extracted_fields?: ReceiptExtractedFields | null;
   reward_amount?: number | null;
   receipt_date?: string | null;
+  receipt_time?: string | null;
+  location?: string | null;
+  payment_method?: string | null;
   rejection_reason?: string | null;
+  reviewed_fields?: Record<string, unknown> | null;
+  moderation_result?: Record<string, unknown> | null;
 };
 
 export type Reward = {

@@ -1,21 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Image, ScrollView, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Card, Divider, Surface, Text, useTheme } from "react-native-paper";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
-import type { Receipt } from "../types";
+import type { Receipt, ReceiptExtractedFields, ReceiptItem } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import LoadingView from "../components/LoadingView";
 import { spacing } from "../theme/colors";
 
 const DETAIL_FIELDS: Array<{ label: string; key: keyof Receipt }> = [
   { label: "Store", key: "store" },
+  { label: "Location", key: "location" },
+  { label: "Payment Method", key: "payment_method" },
   { label: "Total", key: "total" },
   { label: "Receipt Date", key: "receipt_date" },
+  { label: "Receipt Time", key: "receipt_time" },
   { label: "Status", key: "status" },
+  { label: "Reward", key: "reward_amount" },
 ];
+
+const EXTRACTED_FIELDS_EXCLUDED_KEYS = new Set([
+  "items",
+  "store",
+  "location",
+  "payment_method",
+  "total",
+]);
 
 type ReceiptRow = Pick<
   Receipt,
@@ -24,9 +36,14 @@ type ReceiptRow = Pick<
   | "store"
   | "total"
   | "status"
-  | "parsed_json"
   | "image_url"
   | "receipt_date"
+  | "receipt_time"
+  | "reward_amount"
+  | "location"
+  | "payment_method"
+  | "extracted_fields"
+  | "parsed_json"
 >;
 
 type Props = NativeStackScreenProps<ReceiptsStackParamList, "ReceiptDetail">;
@@ -51,7 +68,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
         const { data, error: queryError } = await supabase
           .from("receipts")
           .select(
-            "id, created_at, store, total, status, parsed_json, image_url, receipt_date"
+            "id, created_at, store, total, status, extracted_fields, parsed_json, image_url, receipt_date, receipt_time, reward_amount, location, payment_method"
           )
           .eq("id", route.params.receiptId)
           .eq("user_id", session.user.id)
@@ -84,6 +101,77 @@ export default function ReceiptDetailScreen({ route }: Props) {
     };
   }, [route.params.receiptId, session?.user?.id]);
 
+  const extractedFields: ReceiptExtractedFields | null = useMemo(() => {
+    if (!receipt) {
+      return null;
+    }
+    if (receipt.extracted_fields) {
+      return receipt.extracted_fields;
+    }
+    if (receipt.parsed_json) {
+      return receipt.parsed_json as ReceiptExtractedFields;
+    }
+    return null;
+  }, [receipt]);
+
+  const extractedItems: ReceiptItem[] = useMemo(() => {
+    if (!extractedFields?.items) {
+      return [];
+    }
+    if (!Array.isArray(extractedFields.items)) {
+      return [];
+    }
+    return extractedFields.items.filter((item): item is ReceiptItem =>
+      Boolean(item)
+    );
+  }, [extractedFields]);
+
+  const additionalFields = useMemo(
+    () =>
+      extractedFields
+        ? Object.entries(extractedFields).filter(
+            ([key, value]) =>
+              !EXTRACTED_FIELDS_EXCLUDED_KEYS.has(key) &&
+              value !== null &&
+              value !== undefined
+          )
+        : [],
+    [extractedFields]
+  );
+
+  const resolvedImageUrl = useMemo(() => {
+    if (!receipt?.image_url) {
+      return null;
+    }
+
+    const rawUrl = receipt.image_url;
+    const receiptsMatch = rawUrl.match(/receipts\/(.+)$/);
+
+    if (receiptsMatch) {
+      const objectPath = receiptsMatch[1];
+      const { data } = supabase.storage
+        .from("receipts")
+        .getPublicUrl(objectPath);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+    }
+
+    if (!rawUrl.startsWith("http")) {
+      const normalized = rawUrl.startsWith("receipts/")
+        ? rawUrl.replace(/^receipts\//, "")
+        : rawUrl;
+      const { data } = supabase.storage
+        .from("receipts")
+        .getPublicUrl(normalized);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+    }
+
+    return rawUrl;
+  }, [receipt?.image_url]);
+
   if (loading && !receipt) {
     return <LoadingView message="Loading receipt details" />;
   }
@@ -108,10 +196,6 @@ export default function ReceiptDetailScreen({ route }: Props) {
     );
   }
 
-  const parsedFields = receipt.parsed_json
-    ? Object.entries(receipt.parsed_json)
-    : [];
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Card>
@@ -126,9 +210,9 @@ export default function ReceiptDetailScreen({ route }: Props) {
           >
             Submitted {new Date(receipt.created_at).toLocaleString()}
           </Text>
-          {receipt.image_url ? (
+          {resolvedImageUrl ? (
             <Image
-              source={{ uri: receipt.image_url }}
+              source={{ uri: resolvedImageUrl }}
               style={{ width: "100%", height: 220, borderRadius: 12 }}
               resizeMode="cover"
             />
@@ -152,6 +236,9 @@ export default function ReceiptDetailScreen({ route }: Props) {
                   ? String(value)
                   : parsed.toLocaleDateString();
               }
+              if (field.key === "receipt_time") {
+                return String(value);
+              }
               return String(value);
             })();
 
@@ -168,7 +255,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
       <Card>
         <Card.Title title="Parsed Data" subtitle="OCR extracted fields" />
         <Card.Content style={styles.cardContent}>
-          {parsedFields.length === 0 ? (
+          {additionalFields.length === 0 && extractedItems.length === 0 ? (
             <Text
               variant="bodyMedium"
               style={{ color: theme.colors.onSurfaceVariant }}
@@ -176,13 +263,38 @@ export default function ReceiptDetailScreen({ route }: Props) {
               OCR results will appear here once processing completes.
             </Text>
           ) : (
-            parsedFields.map(([key, value]) => (
-              <View key={key} style={styles.parsedItem}>
-                <Text variant="labelLarge">{key}</Text>
-                <Text>{JSON.stringify(value)}</Text>
-                <Divider style={{ marginTop: 8 }} />
-              </View>
-            ))
+            <>
+              {additionalFields.map(([key, value]) => (
+                <View key={key} style={styles.parsedItem}>
+                  <Text variant="labelLarge">{key}</Text>
+                  <Text>{JSON.stringify(value)}</Text>
+                  <Divider style={{ marginTop: 8 }} />
+                </View>
+              ))}
+              {extractedItems.length > 0 ? (
+                <View style={styles.parsedItem}>
+                  <Text variant="labelLarge">Items</Text>
+                  {extractedItems.map((item, index) => (
+                    <View key={`${item.name ?? "item"}-${index}`}>
+                      <Text variant="titleSmall">Item {index + 1}</Text>
+                      <Text>
+                        {item.name ?? "Unnamed item"}
+                        {item.brand ? ` • ${item.brand}` : ""}
+                      </Text>
+                      <Text>
+                        {item.price !== undefined && item.price !== null
+                          ? `$${Number(item.price).toFixed(2)}`
+                          : "--"}
+                        {item.quantity
+                          ? ` • Qty: ${Number(item.quantity)}`
+                          : ""}
+                      </Text>
+                      <Divider style={{ marginVertical: 8 }} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </>
           )}
         </Card.Content>
       </Card>

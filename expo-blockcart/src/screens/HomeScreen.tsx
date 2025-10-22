@@ -33,7 +33,15 @@ const MAX_RECENT_RECEIPTS = 3;
 type BalanceRow = Pick<UserBalance, "total_balance">;
 type RecentReceiptRow = Pick<
   Receipt,
-  "id" | "created_at" | "store" | "total" | "status" | "parsed_json"
+  | "id"
+  | "created_at"
+  | "store"
+  | "total"
+  | "status"
+  | "extracted_fields"
+  | "location"
+  | "payment_method"
+  | "receipt_date"
 >;
 
 type Props = BottomTabScreenProps<AppTabParamList, "Home">;
@@ -61,7 +69,9 @@ export default function HomeScreen({ navigation }: Props) {
           .maybeSingle(),
         supabase
           .from("receipts")
-          .select("id, created_at, store, total, status, parsed_json")
+          .select(
+            "id, created_at, store, total, status, extracted_fields, location, payment_method, receipt_date"
+          )
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(MAX_RECENT_RECEIPTS),
@@ -496,8 +506,11 @@ export default function HomeScreen({ navigation }: Props) {
                             variant="bodyMedium"
                             style={dynamicStyles.receiptDetails}
                           >
-                            ${receipt.total?.toFixed(2) ?? "--"} •{" "}
-                            {new Date(receipt.created_at).toLocaleDateString()}
+                            ${receipt.total?.toFixed(2) ?? "--"} • {(
+                              receipt.receipt_date
+                                ? new Date(receipt.receipt_date).toLocaleDateString()
+                                : new Date(receipt.created_at).toLocaleDateString()
+                            )}
                           </Text>
                         </View>
 

@@ -43,7 +43,8 @@ export default function ReferralScreen(_props: Props) {
         supabase
           .from(REFERRALS_TABLE)
           .select("bonus")
-          .eq("referrer", session.user.id),
+          .eq("referrer", session.user.id)
+          .eq("status", "completed"),
       ]);
 
       if (profileResponse.error) {
