@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { getSupabaseServerClient } from "@/lib/supabase/server"
-import { fetchUserRole } from "@/lib/supabase/dashboard"
+import { deriveUserRoleFromMetadata, isWebUser } from "@/lib/roles"
 import { StatsSection } from "./_components/stats-section"
 import { StatsSectionSkeleton } from "./_components/stats-skeleton"
 import { RecentReceiptsSection } from "./_components/recent-receipts-section"
@@ -19,7 +19,7 @@ export default async function DashboardPage() {
     console.error("Failed to load authenticated user", error)
   }
 
-  const role = await fetchUserRole(supabase, user?.id)
+  const role = isWebUser(user) ? deriveUserRoleFromMetadata(user) : "reviewer"
 
   return (
     <div className="space-y-6">

@@ -15,6 +15,7 @@ import {
 } from "./supabase/client";
 import { useRouter } from "next/navigation";
 import type { UserRole } from "@/lib/types";
+import { resolveRoleAndWebUser } from "@/lib/roles";
 
 interface AuthContextType {
   user: User | null;
@@ -34,29 +35,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const resolveUserRole = useCallback(
-    (currentUser: User | null, context = "unknown") => {
-      if (!currentUser) {
-        setUserRole(null);
-        return;
-      }
+  const resolveUserRole = useCallback((currentUser: User | null, context = "unknown") => {
+    if (!currentUser) {
+      setUserRole(null);
+      return;
+    }
 
-      const metadata = currentUser.user_metadata ?? {};
-      const userType = metadata.user_type;
+    const { isWebUser, role } = resolveRoleAndWebUser(currentUser);
 
-      if (userType !== "web") {
-        console.log(`User is not a web user (${context})`);
-        setUserRole(null);
-        return;
-      }
+    if (!isWebUser) {
+      console.log(`User is not a web user (${context})`);
+      setUserRole(null);
+      return;
+    }
 
-      const metadataRole = metadata.role as UserRole | undefined;
-      const finalRole = metadataRole ?? "reviewer";
-      console.log(`Resolved user role from metadata (${context}):`, finalRole);
-      setUserRole(finalRole);
-    },
-    []
-  );
+    console.log(`Resolved user role from metadata (${context}):`, role);
+    setUserRole(role);
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -119,12 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         setSession(sessionData);
         resolveUserRole(userData, "sign in");
+        return;
       }
+
+      // If Supabase did not throw but also did not return a user, reset loading state.
+      setLoading(false);
     } catch (error) {
       console.error("Sign in error:", error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 

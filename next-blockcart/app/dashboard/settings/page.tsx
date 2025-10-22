@@ -144,6 +144,27 @@ export default function SettingsPage() {
     }
   }, [guardLoading, isAdmin])
 
+  if (guardLoading) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+        <Spinner className="h-6 w-6" />
+        <p>Verifying administrator access…</p>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+        <AlertTriangle className="h-5 w-5" />
+        <div className="text-center text-sm">
+          <p className="font-medium text-foreground">Admin access required</p>
+          <p>You do not have permission to manage platform settings.</p>
+        </div>
+      </div>
+    )
+  }
+
   const environmentBadges = useMemo(() => {
     if (!settings) {
       return null

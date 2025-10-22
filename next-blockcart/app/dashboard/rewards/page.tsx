@@ -159,13 +159,7 @@ export default function RewardsPage() {
       .from("rewards")
       .select(
         `
-        id,
-        user_id,
-        campaign_id,
-        amount,
-        status,
-        created_at,
-        paid_at,
+        *,
         users:user_id (
           id,
           email

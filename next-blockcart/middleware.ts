@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveRoleAndWebUser } from "@/lib/roles";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -49,8 +50,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user) {
-    const userMetadata = user.user_metadata ?? {};
-    const isWebUser = userMetadata.user_type === "web";
+    const { isWebUser } = resolveRoleAndWebUser(user);
 
     if (!isWebUser) {
       console.log(
