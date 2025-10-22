@@ -148,6 +148,8 @@ export default function UploadReceiptScreen({ navigation }: Props) {
           body: {
             user_id: session.user.id,
             image_url: publicUrl,
+            storage_path: path,
+            bucket: "receipts",
           },
         });
 
