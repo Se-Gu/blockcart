@@ -65,6 +65,35 @@ export async function StatsSection({ role }: StatsSectionProps) {
     ? ((receiptStats.rejected / receiptStats.total) * 100).toFixed(1)
     : "0.0"
 
+  // Prepare action cards array outside the render to avoid JS expression in JSX error
+  const actionCards =
+    role === "admin"
+      ? [
+          {
+            title: "Manage Campaigns",
+            description: "Launch new promotions or update existing campaigns.",
+            href: "/dashboard/campaigns",
+            buttonLabel: "Go to campaigns",
+            buttonVariant: "secondary" as const,
+          },
+          {
+            title: "Review Rewards",
+            description: "Track payouts and approve pending rewards.",
+            href: "/dashboard/rewards",
+            buttonLabel: "Manage rewards",
+            buttonVariant: "outline" as const,
+          },
+        ]
+      : [
+          {
+            title: "Pending Reviews",
+            description: "View and approve receipts awaiting review.",
+            href: "/dashboard/receipts",
+            buttonLabel: "Go to pending receipts",
+            buttonVariant: undefined,
+          },
+        ]
+
   return (
     <div className="space-y-4">
       <div
@@ -108,28 +137,22 @@ export async function StatsSection({ role }: StatsSectionProps) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="flex flex-col justify-between">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Pending Reviews</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>View and approve receipts awaiting review.</p>
-            <Button asChild>
-              <Link href="/dashboard/receipts">Go to pending receipts</Link>
-            </Button>
-          </CardContent>
-        </Card>
-        <Card className="flex flex-col justify-between">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Manage Campaigns</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>Launch new promotions or update existing campaigns.</p>
-            <Button asChild variant="secondary">
-              <Link href="/dashboard/campaigns">Go to campaigns</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        {actionCards.map((action) => (
+          <Card key={action.title} className="flex flex-col justify-between">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">{action.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>{action.description}</p>
+              <Button
+                asChild
+                variant={action.buttonVariant ?? "default"}
+              >
+                <Link href={action.href}>{action.buttonLabel}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

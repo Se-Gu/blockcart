@@ -12,10 +12,10 @@ import {
   getSupabaseBrowserClient,
   getCurrentUser,
   getCurrentSession,
-  getUserRole,
 } from "./supabase/client";
 import { useRouter } from "next/navigation";
 import type { UserRole } from "@/lib/types";
+import { resolveRoleAndWebUser } from "@/lib/roles";
 
 interface AuthContextType {
   user: User | null;
@@ -33,62 +33,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
-  const [roleFetching, setRoleFetching] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const router = useRouter();
 
-  const resolveUserRole = useCallback(
-    async (currentUser: User | null, context = "unknown") => {
-      if (!currentUser) {
-        setUserRole(null);
-        return;
-      }
+  const resolveUserRole = useCallback((currentUser: User | null, context = "unknown") => {
+    if (!currentUser) {
+      setUserRole(null);
+      return;
+    }
 
-      // Prevent duplicate role fetches
-      if (roleFetching) {
-        console.log(`Role fetch already in progress, skipping (${context})`);
-        return;
-      }
+    const { isWebUser, role } = resolveRoleAndWebUser(currentUser);
 
-      // If we already have a valid role for this user, don't fetch again
-      if (userRole && user?.id === currentUser.id) {
-        console.log(
-          `Already have role ${userRole} for user ${currentUser.id}, skipping fetch (${context})`
-        );
-        return;
-      }
+    if (!isWebUser) {
+      console.log(`User is not a web user (${context})`);
+      setUserRole(null);
+      return;
+    }
 
-      setRoleFetching(true);
-      const metadataRole =
-        (currentUser.user_metadata?.role as UserRole | undefined) ?? null;
-
-      try {
-        console.log(
-          `Starting getUserRole for user ${currentUser.id} (${context})`
-        );
-        const dbRole = await getUserRole(currentUser.id);
-        console.log(
-          `getUserRole completed with result: ${dbRole} (${context})`
-        );
-
-        if (dbRole === null) {
-          // User not found in web_users table
-          console.log(`User not found in web_users table (${context})`);
-          setUserRole(null);
-          return;
-        }
-        const finalRole = dbRole ?? metadataRole ?? "reviewer";
-        console.log(`Resolved user role (${context}):`, finalRole);
-        setUserRole(finalRole);
-      } catch (roleError) {
-        console.error(`Error fetching user role (${context}):`, roleError);
-        // If there's an error, set role to null to trigger redirect
-        setUserRole(null);
-      } finally {
-        setRoleFetching(false);
-      }
-    },
-    [roleFetching, userRole, user?.id]
-  );
+    console.log(`Resolved user role from metadata (${context}):`, role);
+    setUserRole(role);
+  }, []);
 
   useEffect(() => {
     // Get initial session
@@ -101,9 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(userData);
         setSession(sessionData);
-        await resolveUserRole(userData, "initial load");
+        resolveUserRole(userData, "initial load");
+        setHasInitialized(true);
       } catch (error) {
         console.error("Error getting session:", error);
+        setHasInitialized(true);
       } finally {
         setLoading(false);
       }
@@ -115,28 +81,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event, session?.user?.email);
-      setLoading(true);
+    } = supabase.auth.onAuthStateChange(async (event: string, session: Session | null) => {
       const currentUser = session?.user ?? null;
+      console.log("Auth state changed:", event, currentUser?.email, "hasInitialized:", hasInitialized, "currentUser:", currentUser?.id);
+      
+      // Only process if we've initialized (completed initial session load)
+      if (!hasInitialized) {
+        console.log("Not yet initialized, skipping auth state change handler");
+        return;
+      }
+
+      setLoading(true);
       setUser(currentUser);
       setSession(session);
 
       console.log("Resolving user role for:", currentUser?.id);
-      await resolveUserRole(currentUser, "auth state change");
+      resolveUserRole(currentUser, "auth state change");
       setLoading(false);
 
       if (event === "SIGNED_OUT") {
         console.log("User signed out, redirecting to login");
         router.push("/login");
       } else if (event === "SIGNED_IN" && currentUser) {
-        console.log("User signed in successfully, redirecting to dashboard");
-        router.push("/dashboard");
+        // Don't redirect on SIGNED_IN event - let the page stay where it is
+        // The user is already authenticated, they don't need to be sent to dashboard
+        console.log("User signed in, but not redirecting (user is already authenticated)");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [resolveUserRole, router]);
+  }, [resolveUserRole, router, hasInitialized]);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
@@ -150,13 +124,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userData && sessionData) {
         setUser(userData);
         setSession(sessionData);
-        await resolveUserRole(userData, "sign in");
+        resolveUserRole(userData, "sign in");
+        return;
       }
+
+      // If Supabase did not throw but also did not return a user, reset loading state.
+      setLoading(false);
     } catch (error) {
       console.error("Sign in error:", error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 

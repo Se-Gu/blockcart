@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { UserRole } from "@/lib/types";
 
 export interface ReceiptStats {
   total: number;
@@ -286,29 +285,6 @@ export async function fetchTotalUsers(
   }
 
   return total + (usersResult.count ?? 0);
-}
-
-export async function fetchUserRole(
-  supabase: SupabaseClient,
-  userId: string | undefined
-): Promise<UserRole> {
-  if (!userId) {
-    return "reviewer";
-  }
-
-  const { data, error } = await supabase
-    .from("web_users")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("Failed to fetch user role from web_users table", error);
-    return "reviewer";
-  }
-
-  const role = (data as { role?: string } | null)?.role;
-  return role === "admin" ? "admin" : "reviewer";
 }
 
 export async function fetchRecentReceipts(supabase: SupabaseClient) {

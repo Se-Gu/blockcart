@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -33,7 +34,6 @@ export default function LoginPage() {
       setAccessDenied(true);
     } else if (user && !loading) {
       // User is authenticated and not loading, redirect to dashboard
-      console.log("User already authenticated, redirecting to dashboard");
       router.push("/dashboard");
     }
   }, [user, loading, router]);
@@ -48,7 +48,6 @@ export default function LoginPage() {
     }
 
     try {
-      console.log("Login attempt:", email);
       await signIn(email, password);
       // Navigation is handled by the auth context onAuthStateChange
     } catch (err: any) {
@@ -114,7 +113,14 @@ export default function LoginPage() {
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Sign in"}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Signing in…</span>
+                  </span>
+                ) : (
+                  "Sign in"
+                )}
               </Button>
             </form>
           )}

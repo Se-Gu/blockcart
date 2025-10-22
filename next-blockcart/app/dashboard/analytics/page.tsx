@@ -198,7 +198,15 @@ export default function AnalyticsPage() {
   }
 
   if (!isAdmin) {
-    return null
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+        <AlertTriangle className="h-5 w-5" />
+        <div className="text-center text-sm">
+          <p className="font-medium text-foreground">Admin access required</p>
+          <p>You need an administrator account to view analytics.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
