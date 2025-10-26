@@ -4,6 +4,21 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
+type RewardStatus = "pending" | "approved" | "paid";
+
+const VALID_REWARD_STATUSES = new Set<RewardStatus>(["pending", "approved", "paid"]);
+
+const normalizeStatus = (value: unknown): RewardStatus => {
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase() as RewardStatus;
+    if (VALID_REWARD_STATUSES.has(normalized)) {
+      return normalized;
+    }
+  }
+
+  return "pending";
+};
+
 const rewardSelect = "id, user_id, campaign_id, amount, status, created_at, paid_at, " + "users:user_id ( id, email, full_name ), " + "campaigns:campaign_id ( id, name, brand )";
 serve(async (req)=>{
   if (req.method === "OPTIONS") {
@@ -123,7 +138,7 @@ serve(async (req)=>{
       campaign_id: payload?.campaign_id ?? null,
       amount: rewardAmount,
       description: payload?.description ?? "Receipt approval reward",
-      status: payload?.status ?? "pending"
+      status: normalizeStatus(payload?.status)
     };
     const { data: reward, error: insertError } = await supabase.from("rewards").insert(insertPayload).select(rewardSelect).single();
     if (insertError) {

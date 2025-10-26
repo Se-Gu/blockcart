@@ -113,10 +113,13 @@ CREATE TABLE public.rewards (
   created_at timestamp with time zone DEFAULT now(),
   description text,
   updated_at timestamp with time zone DEFAULT now(),
+  status text NOT NULL DEFAULT 'pending',
+  paid_at timestamp with time zone,
   CONSTRAINT rewards_pkey PRIMARY KEY (id),
   CONSTRAINT rewards_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT rewards_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id),
-  CONSTRAINT rewards_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id)
+  CONSTRAINT rewards_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id),
+  CONSTRAINT rewards_status_check CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'paid'::text]))
 );
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
