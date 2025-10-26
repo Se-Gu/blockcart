@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import type { Receipt, ReceiptReview, ReviewedFieldUpdates } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
@@ -177,6 +178,14 @@ export default function ReceiptReviewPage() {
         return
       }
 
+      if (receipt.status === "approved") {
+        toast({
+          title: "Receipt is approved",
+          description: "Approved receipts are read-only.",
+        })
+        return
+      }
+
       setActionLoading(true)
 
       const reviewedFields: ReviewedFieldUpdates = {
@@ -241,6 +250,14 @@ export default function ReceiptReviewPage() {
 
   const handleReRunOcr = useCallback(async () => {
     if (!receipt) return
+
+    if (receipt.status === "approved") {
+      toast({
+        title: "Receipt is approved",
+        description: "OCR cannot be re-run on approved receipts.",
+      })
+      return
+    }
 
     setOcrLoading(true)
     try {
@@ -307,6 +324,7 @@ export default function ReceiptReviewPage() {
   const extractedTimeOnly = extractedDate
     ? new Date(extractedDate).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" })
     : null
+  const isReadOnly = receipt.status === "approved"
 
   return (
     <div className="min-h-screen bg-muted/30 p-6">
@@ -326,13 +344,22 @@ export default function ReceiptReviewPage() {
           </Badge>
         </div>
 
+        {isReadOnly ? (
+          <Alert>
+            <AlertTitle>Receipt approved</AlertTitle>
+            <AlertDescription>
+              This receipt has already been approved and cannot be modified.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Receipt Image</CardTitle>
-                  <Button variant="outline" size="sm" onClick={handleReRunOcr} disabled={ocrLoading}>
+                  <Button variant="outline" size="sm" onClick={handleReRunOcr} disabled={ocrLoading || isReadOnly}>
                     {ocrLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -460,6 +487,7 @@ export default function ReceiptReviewPage() {
                         onChange={(e) => setStore(e.target.value)}
                         placeholder="Enter store name"
                         className="mt-1"
+                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -488,6 +516,7 @@ export default function ReceiptReviewPage() {
                         onChange={(e) => setLocation(e.target.value)}
                         placeholder="Enter location"
                         className="mt-1"
+                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -509,13 +538,14 @@ export default function ReceiptReviewPage() {
                         <Label htmlFor="receiptDate" className="text-xs text-muted-foreground">
                           Corrected Date
                         </Label>
-                        <Input
-                          id="receiptDate"
-                          type="date"
-                          value={receiptDate}
-                          onChange={(e) => setReceiptDate(e.target.value)}
-                          className="mt-1"
-                        />
+                      <Input
+                        id="receiptDate"
+                        type="date"
+                        value={receiptDate}
+                        onChange={(e) => setReceiptDate(e.target.value)}
+                        className="mt-1"
+                        disabled={isReadOnly}
+                      />
                       </div>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
@@ -529,13 +559,14 @@ export default function ReceiptReviewPage() {
                         <Label htmlFor="receiptTime" className="text-xs text-muted-foreground">
                           Corrected Time
                         </Label>
-                        <Input
-                          id="receiptTime"
-                          type="time"
-                          value={receiptTime}
-                          onChange={(e) => setReceiptTime(e.target.value)}
-                          className="mt-1"
-                        />
+                      <Input
+                        id="receiptTime"
+                        type="time"
+                        value={receiptTime}
+                        onChange={(e) => setReceiptTime(e.target.value)}
+                        className="mt-1"
+                        disabled={isReadOnly}
+                      />
                       </div>
                     </div>
                   </div>
@@ -564,6 +595,7 @@ export default function ReceiptReviewPage() {
                         onChange={(e) => setPaymentMethod(e.target.value)}
                         placeholder="Enter payment method"
                         className="mt-1"
+                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -594,6 +626,7 @@ export default function ReceiptReviewPage() {
                         onChange={(e) => setTotal(e.target.value)}
                         placeholder="0.00"
                         className="mt-1"
+                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -611,6 +644,7 @@ export default function ReceiptReviewPage() {
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Add any notes or reasons for rejection..."
                     rows={4}
+                    disabled={isReadOnly}
                   />
                 </div>
               </CardContent>
@@ -622,7 +656,7 @@ export default function ReceiptReviewPage() {
                 variant="destructive"
                 className="flex-1"
                 onClick={() => handleReview(false)}
-                disabled={actionLoading}
+                disabled={actionLoading || isReadOnly}
               >
                 {actionLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <X className="mr-2 h-5 w-5" />}
                 Reject Receipt
@@ -631,7 +665,7 @@ export default function ReceiptReviewPage() {
                 size="lg"
                 className="flex-1 bg-green-600 hover:bg-green-700"
                 onClick={() => handleReview(true)}
-                disabled={actionLoading}
+                disabled={actionLoading || isReadOnly}
               >
                 {actionLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
                 Approve Receipt

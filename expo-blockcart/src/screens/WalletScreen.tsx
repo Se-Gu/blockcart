@@ -185,7 +185,7 @@ export default function WalletScreen(_props: Props) {
           Total Balance
         </Text>
         <Text variant="displayMedium" style={dynamicStyles.balanceAmount}>
-          {totalBalance?.toFixed(2) ?? "0.00"} BCT$
+          {totalBalance?.toFixed(2) ?? "0.00"} BTC$
         </Text>
         <Button
           mode="contained-tonal"
@@ -231,7 +231,7 @@ export default function WalletScreen(_props: Props) {
                   marginTop: spacing.xs,
                 }}
               >
-                Upload receipts to start earning BCT$
+                Upload receipts to start earning BTC$
               </Text>
             </View>
           ) : (
@@ -265,7 +265,7 @@ export default function WalletScreen(_props: Props) {
                   )}
                   right={() => (
                     <Text style={dynamicStyles.rewardAmount}>
-                      +{reward.amount.toFixed(2)} BCT$
+                      +{reward.amount.toFixed(2)} BTC$
                     </Text>
                   )}
                 />

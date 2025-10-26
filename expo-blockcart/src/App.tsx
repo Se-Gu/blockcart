@@ -178,11 +178,11 @@ export default function App() {
             const rewardAmount = newRow.reward_amount;
             const rewardText =
               rewardAmount && rewardAmount > 0
-                ? ` ${rewardAmount.toFixed(2)} BCT$!`
+                ? ` ${rewardAmount.toFixed(2)} BTC$!`
                 : "!";
             await Notifications.scheduleNotificationAsync({
               content: {
-                title: "🎉 Your receipt earned BCT$!",
+                title: "🎉 Your receipt earned BTC$!",
                 body: `Your receipt was approved${rewardText}`,
               },
               trigger: null,

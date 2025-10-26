@@ -141,3 +141,40 @@ CREATE TABLE public.web_users (
   CONSTRAINT web_users_pkey PRIMARY KEY (id),
   CONSTRAINT web_users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+
+CREATE OR REPLACE FUNCTION public.ensure_referral_code(target_user_id uuid)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO public
+AS $$
+DECLARE
+  existing_code text;
+  new_code text;
+BEGIN
+  SELECT referral_code INTO existing_code
+  FROM public.users
+  WHERE id = target_user_id
+  FOR UPDATE;
+
+  IF existing_code IS NOT NULL THEN
+    RETURN existing_code;
+  END IF;
+
+  LOOP
+    new_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+    EXIT WHEN NOT EXISTS(
+      SELECT 1 FROM public.users WHERE referral_code = new_code
+    );
+  END LOOP;
+
+  UPDATE public.users
+  SET referral_code = new_code,
+      updated_at = now()
+  WHERE id = target_user_id;
+
+  RETURN new_code;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.ensure_referral_code(uuid) TO authenticated;

@@ -98,6 +98,13 @@ const assignmentStatusesForFilter = (
   return ["completed"]
 }
 
+const escapePostgrestOrTerm = (term: string): string =>
+  term
+    .replace(/\\/g, "\\\\")
+    .replace(/,/g, "\\,")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+
 function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
   const receipt = row.receipt
 
@@ -308,8 +315,9 @@ export default function ReceiptsPage() {
 
       if (searchQuery.trim()) {
         const term = `%${searchQuery.trim()}%`
+        const escapedTerm = escapePostgrestOrTerm(term)
         query = query.or(
-          `receipts.id.ilike.${term},receipts.store.ilike.${term},receipts.location.ilike.${term},receipts.rejection_reason.ilike.${term}`,
+          `receipts.id.ilike.${escapedTerm},receipts.store.ilike.${escapedTerm},receipts.location.ilike.${escapedTerm},receipts.rejection_reason.ilike.${escapedTerm}`,
         )
       }
 
@@ -651,8 +659,6 @@ export default function ReceiptsPage() {
     { label: "Pending Review", value: "pending_review" },
     { label: "Approved", value: "approved" },
     { label: "Rejected", value: "rejected" },
-    { label: "Flagged", value: "flagged" },
-    { label: "Error", value: "error" },
   ]
 
   const reviewerSelectOptions = useMemo(
