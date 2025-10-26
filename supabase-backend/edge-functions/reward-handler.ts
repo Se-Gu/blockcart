@@ -132,19 +132,30 @@ serve(async (req)=>{
         }
       });
     }
-    const insertPayload = {
-      user_id: userId,
-      receipt_id: receiptId,
-      campaign_id: payload?.campaign_id ?? null,
-      amount: rewardAmount,
-      description: payload?.description ?? "Receipt approval reward",
-      status: normalizeStatus(payload?.status)
+    const normalizedStatus = normalizeStatus(payload?.status);
+
+    const fetchExistingReward = async () => {
+      const { data: existingReward, error: existingError } = await supabase
+        .from("rewards")
+        .select(rewardSelect)
+        .eq("receipt_id", receiptId)
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        return { existingReward: null, existingError } as const;
+      }
+
+      return { existingReward, existingError: null } as const;
     };
-    const { data: reward, error: insertError } = await supabase.from("rewards").insert(insertPayload).select(rewardSelect).single();
-    if (insertError) {
+
+    const { existingReward, existingError } = await fetchExistingReward();
+
+    if (existingError) {
       return new Response(JSON.stringify({
         success: false,
-        error: insertError.message
+        error: existingError.message
       }), {
         status: 400,
         headers: {
@@ -153,13 +164,129 @@ serve(async (req)=>{
         }
       });
     }
+
+    const baseRewardPayload = {
+      user_id: userId,
+      receipt_id: receiptId,
+      campaign_id: payload?.campaign_id ?? null,
+      amount: rewardAmount,
+      description: payload?.description ?? "Receipt approval reward",
+      status: normalizedStatus
+    };
+
+    let reward = existingReward;
+
+    if (existingReward) {
+      const updatePayload: Record<string, unknown> = {};
+
+      if (existingReward.amount !== rewardAmount) {
+        updatePayload.amount = rewardAmount;
+      }
+
+      if (existingReward.status !== normalizedStatus) {
+        updatePayload.status = normalizedStatus;
+      }
+
+      if (existingReward.description !== baseRewardPayload.description) {
+        updatePayload.description = baseRewardPayload.description;
+      }
+
+      if (existingReward.campaign_id !== baseRewardPayload.campaign_id) {
+        updatePayload.campaign_id = baseRewardPayload.campaign_id;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        updatePayload.updated_at = new Date().toISOString();
+
+        const { data: updatedReward, error: updateError } = await supabase
+          .from("rewards")
+          .update(updatePayload)
+          .eq("id", existingReward.id)
+          .select(rewardSelect)
+          .single();
+
+        if (updateError) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: updateError.message
+          }), {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json"
+            }
+          });
+        }
+
+        reward = updatedReward;
+      }
+    } else {
+      const { data: insertedReward, error: insertError } = await supabase
+        .from("rewards")
+        .insert(baseRewardPayload)
+        .select(rewardSelect)
+        .single();
+
+      if (insertError) {
+        const isConflict =
+          insertError.code === "23505" ||
+          insertError.details?.toLowerCase().includes("duplicate key") ||
+          insertError.message?.toLowerCase().includes("duplicate key");
+
+        if (isConflict) {
+          const { existingReward: conflictReward, existingError: conflictError } = await fetchExistingReward();
+
+          if (conflictError) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: conflictError.message
+            }), {
+              status: 400,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json"
+              }
+            });
+          }
+
+          reward = conflictReward;
+        } else {
+          return new Response(JSON.stringify({
+            success: false,
+            error: insertError.message
+          }), {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json"
+            }
+          });
+        }
+      } else {
+        reward = insertedReward;
+      }
+    }
+
+    if (!reward) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Unable to retrieve reward"
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+
     await supabase.from("receipts").update({
       status: "approved",
-      reward_amount: rewardAmount
+      reward_amount: reward.amount
     }).eq("id", receiptId);
     return new Response(JSON.stringify({
       success: true,
-      amount: rewardAmount,
+      amount: reward.amount,
       reward
     }), {
       headers: {
