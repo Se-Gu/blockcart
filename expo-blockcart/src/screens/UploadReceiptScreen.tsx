@@ -43,6 +43,16 @@ export default function UploadReceiptScreen({ navigation }: Props) {
   const [eta, setEta] = useState<string | null>(null);
 
   const pickImage = useCallback(async () => {
+    const mediaLibraryPermission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!mediaLibraryPermission.granted) {
+      showWarning(
+        "Gallery access required. Please enable photo permissions."
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: false,
       quality: 0.7,
@@ -52,7 +62,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     if (!result.canceled) {
       setSelectedImage(result.assets[0]);
     }
-  }, []);
+  }, [showWarning]);
 
   const captureImage = useCallback(async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
