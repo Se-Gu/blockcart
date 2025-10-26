@@ -16,9 +16,7 @@ type ReceiptActivity = {
   created_at?: string | null
   receipt_date?: string | null
   store?: string | null
-  store_name?: string | null
   total?: number | null
-  total_amount?: number | null
 }
 
 interface UserDetailDialogProps {
@@ -58,7 +56,7 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
 
       const { data, error } = await supabase
         .from("receipts")
-        .select("id, status, created_at, receipt_date, store, store_name, total, total_amount")
+        .select("id, status, created_at, receipt_date, store, total")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(5)
@@ -87,11 +85,10 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
     return () => {
       isMounted = false
     }
-  }, [open, user?.id])
-
-  if (!user) return null
+  }, [open, user, toast])
 
   const handleUpdateRole = async () => {
+    if (!user) return
     if (selectedRole === user.role) {
       onOpenChange(false)
       return
@@ -126,6 +123,10 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
       }),
     []
   )
+
+  if (!user) {
+    return null
+  }
 
   const lifetimeTokens = user.lifetime_tokens ?? user.total_rewards ?? 0
 
@@ -215,16 +216,8 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
                   <p className="text-sm text-muted-foreground">No recent receipts</p>
                 ) : (
                   recentReceipts.map((receipt) => {
-                    const amount =
-                      typeof receipt.total === "number"
-                        ? receipt.total
-                        : typeof receipt.total_amount === "number"
-                          ? receipt.total_amount
-                          : Number(receipt.total ?? receipt.total_amount)
-                    const storeName =
-                      (receipt as { store_name?: string | null }).store_name ??
-                      (receipt as { store?: string | null }).store ??
-                      "Unknown store"
+                    const amount = receipt.total ?? 0
+                    const storeName = receipt.store ?? "Unknown store"
                     const displayDate = receipt.receipt_date ?? receipt.created_at
 
                     return (
