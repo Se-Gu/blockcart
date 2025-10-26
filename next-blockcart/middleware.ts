@@ -41,6 +41,12 @@ export async function middleware(request: NextRequest) {
     user?.email
   );
 
+  // Allow reviewer-verify page without auth (for invite acceptance)
+  if (request.nextUrl.pathname.startsWith("/reviewer-verify")) {
+    console.log("Reviewer verify page accessed, allowing without auth");
+    return supabaseResponse;
+  }
+
   // Redirect to login if not authenticated
   if (!user && !request.nextUrl.pathname.startsWith("/login")) {
     console.log("No user found, redirecting to login");

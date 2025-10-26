@@ -21,14 +21,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { UserDetailDialog } from "@/components/user-detail-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import type { User, UserRole } from "@/lib/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { inviteReviewer } from "@/lib/admin";
 import { useToast } from "@/hooks/use-toast";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserRole, setNewUserRole] = useState<UserRole>("reviewer");
+  const [isAddingUser, setIsAddingUser] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
   const [isLoading, setIsLoading] = useState(true);
@@ -126,7 +133,13 @@ export default function UsersPage() {
       });
 
       const userRows = usersResponse.data ?? [];
-      const nextUsers: User[] = userRows.map((profile) => {
+      const webUserRows = webUsersResponse.data ?? [];
+      
+      // Create a map of existing users to avoid duplicates
+      const existingUserIds = new Set(userRows.map(user => user.id));
+      
+      // Map users from the users table
+      const mappedUsers: User[] = userRows.map((profile) => {
         const rewardTotal = rewardTotals.get(profile.id) ?? 0;
         const referral = referralStats.get(profile.id);
         const lifetimeTokens = rewardTotal + (referral?.bonus ?? 0);
@@ -148,6 +161,32 @@ export default function UsersPage() {
           lifetime_tokens: lifetimeTokens,
         };
       });
+
+      // Map web_users that don't exist in the users table
+      const webOnlyUsers: User[] = webUserRows
+        .filter(webUser => !existingUserIds.has(webUser.id))
+        .map((webUser) => {
+          const rewardTotal = rewardTotals.get(webUser.id) ?? 0;
+          const referral = referralStats.get(webUser.id);
+          const lifetimeTokens = rewardTotal + (referral?.bonus ?? 0);
+          const role = roleMap.get(webUser.id) ?? "reviewer";
+
+          return {
+            id: webUser.id,
+            email: webUser.email,
+            full_name: null,
+            role,
+            created_at: new Date().toISOString(), // Default to current time if no created_at
+            last_login: null,
+            wallet_address: null,
+            referral_code: null,
+            total_rewards: rewardTotal,
+            referral_count: referral?.count ?? 0,
+            lifetime_tokens: lifetimeTokens,
+          };
+        });
+
+      const nextUsers: User[] = [...mappedUsers, ...webOnlyUsers];
 
       if (isMountedRef.current) {
         setUsers(nextUsers);
@@ -217,6 +256,64 @@ export default function UsersPage() {
     [fetchUsers]
   );
 
+  const handleAddUser = useCallback(async () => {
+    if (!newUserEmail.trim()) {
+      toast({
+        title: "Email required",
+        description: "Please enter an email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAddingUser(true);
+    try {
+      // Use the inviteReviewer function to create the user
+      await inviteReviewer(newUserEmail.trim(), undefined);
+      
+      // If the role is admin, update it after creation
+      if (newUserRole === "admin") {
+        const supabase = getSupabaseBrowserClient();
+        // We need to find the user ID first, but since inviteReviewer doesn't return the ID,
+        // we'll refresh the users list and the role will be updated via the web_users table
+        await fetchUsers();
+        
+        // Find the newly created user and update their role
+        const newUser = users.find(user => user.email === newUserEmail.trim());
+        if (newUser) {
+          await supabase.from("web_users").upsert(
+            {
+              id: newUser.id,
+              role: "admin",
+            },
+            { onConflict: "id" }
+          );
+        }
+      } else {
+        await fetchUsers();
+      }
+
+      toast({
+        title: "User added successfully",
+        description: `${newUserEmail} has been added as a ${newUserRole}`,
+      });
+
+      setNewUserEmail("");
+      setNewUserRole("reviewer");
+      setAddUserDialogOpen(false);
+    } catch (error) {
+      console.error("Failed to add user", error);
+      const message = error instanceof Error ? error.message : "Failed to add user";
+      toast({
+        title: "Failed to add user",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingUser(false);
+    }
+  }, [newUserEmail, newUserRole, fetchUsers, users, toast]);
+
   const filteredUsers = users.filter((user) => {
     const normalizedSearch = searchQuery.toLowerCase();
     const matchesSearch =
@@ -257,7 +354,7 @@ export default function UsersPage() {
             Manage admin and reviewer accounts
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setAddUserDialogOpen(true)}>
           <UserPlus className="mr-2 h-4 w-4" />
           Add User
         </Button>
@@ -393,6 +490,51 @@ export default function UsersPage() {
         }}
         onUpdateRole={handleUpdateRole}
       />
+
+      {/* Add User Dialog */}
+      <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={newUserRole} onValueChange={(value) => setNewUserRole(value as UserRole)}>
+                <SelectTrigger id="role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reviewer">Reviewer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setAddUserDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleAddUser} disabled={isAddingUser || !newUserEmail.trim()} className="flex-1">
+                {isAddingUser ? "Adding..." : "Add User"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

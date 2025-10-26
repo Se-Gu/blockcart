@@ -30,6 +30,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 3. **Session Management**: JWT tokens are stored in httpOnly cookies
 4. **Route Protection**: Middleware checks for valid sessions
 
+### Reviewer Invite Flow
+
+1. **Invite Sent**: Admin sends invite via `/dashboard/settings` (calls `invite-reviewer` edge function)
+2. **Email Received**: Reviewer receives invite email from Supabase with verification link
+3. **Link Clicked**: Reviewer clicks link which redirects to `/reviewer-verify?token=...`
+4. **Token Verification**: Page verifies the token and establishes Supabase session
+5. **Password Setup**: Reviewer sets their password
+6. **Session Established**: User is authenticated and redirected to `/dashboard`
+7. **Access Granted**: Reviewer can now access reviewer-only pages (e.g., `/dashboard/receipts`)
+
 ### Expected Supabase Authentication Responses
 
 #### Successful Login Response
@@ -237,6 +247,7 @@ next-blockcart/
 │   │   ├── layout.tsx           # Dashboard layout
 │   │   └── page.tsx             # Main dashboard page
 │   ├── login/                   # Authentication page
+│   ├── reviewer-verify/         # Reviewer invite acceptance & password setup
 │   ├── globals.css              # Global styles
 │   └── layout.tsx               # Root layout
 ├── components/                  # Reusable components
@@ -258,6 +269,8 @@ next-blockcart/
 The application uses Supabase for authentication with the following features:
 
 - **Email/password authentication**
+- **Email invite system** for reviewers
+- **Password reset flow** for invited users
 - **JWT token management**
 - **Protected routes via middleware**
 - **Role-based access control** (admin, reviewer)
