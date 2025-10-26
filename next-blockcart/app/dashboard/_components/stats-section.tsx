@@ -40,19 +40,31 @@ function formatCurrency(amount: number) {
 export async function StatsSection({ role }: StatsSectionProps) {
   const supabase = await getSupabaseServerClient()
 
-  const [receiptStats, rewardStats, activeUsers, topCampaigns, activeCampaigns] = await Promise.all([
-    fetchReceiptStats(supabase),
-    fetchRewardStats(supabase),
-    fetchActiveUsers(supabase),
-    fetchTopCampaigns(supabase),
-    fetchActiveCampaignCount(supabase),
-  ])
+  const receiptStatsPromise = fetchReceiptStats(supabase)
 
+  let receiptStats = await receiptStatsPromise
+  let rewardStats = { totalAmount: 0, pendingAmount: 0 }
+  let activeUsers = 0
+  let topCampaigns: Awaited<ReturnType<typeof fetchTopCampaigns>> = []
+  let activeCampaigns = 0
   let totalUsers = 0
   let referralBonusTotal = 0
 
   if (role === "admin") {
-    ;[totalUsers, referralBonusTotal] = await Promise.all([
+    ;[
+      receiptStats,
+      rewardStats,
+      activeUsers,
+      topCampaigns,
+      activeCampaigns,
+      totalUsers,
+      referralBonusTotal,
+    ] = await Promise.all([
+      receiptStatsPromise,
+      fetchRewardStats(supabase),
+      fetchActiveUsers(supabase),
+      fetchTopCampaigns(supabase),
+      fetchActiveCampaignCount(supabase),
       fetchTotalUsers(supabase),
       fetchReferralBonusTotal(supabase),
     ])
@@ -88,7 +100,7 @@ export async function StatsSection({ role }: StatsSectionProps) {
           {
             title: "Pending Reviews",
             description: "View and approve receipts awaiting review.",
-            href: "/dashboard/receipts",
+            href: "/dashboard/receipts?status=pending_review",
             buttonLabel: "Go to pending receipts",
             buttonVariant: undefined,
           },
@@ -99,7 +111,7 @@ export async function StatsSection({ role }: StatsSectionProps) {
       <div
         className={cn(
           "grid gap-4 md:grid-cols-2",
-          role === "admin" ? "lg:grid-cols-4 xl:grid-cols-5" : "lg:grid-cols-4"
+          role === "admin" ? "lg:grid-cols-4 xl:grid-cols-5" : "lg:grid-cols-2"
         )}
       >
         <StatCard
@@ -115,25 +127,27 @@ export async function StatsSection({ role }: StatsSectionProps) {
           description="Awaiting verification"
         />
         {role === "admin" && (
-          <StatCard
-            title="Total Users"
-            value={totalUsers}
-            icon={Users}
-            trend={{ value: 0, isPositive: true }}
-          />
+          <>
+            <StatCard
+              title="Total Users"
+              value={totalUsers}
+              icon={Users}
+              trend={{ value: 0, isPositive: true }}
+            />
+            <StatCard
+              title="Active Users"
+              value={activeUsers}
+              icon={UserCheck}
+              description="Last 30 days"
+            />
+            <StatCard
+              title="Active Campaigns"
+              value={activeCampaigns}
+              icon={Megaphone}
+              description="Currently running"
+            />
+          </>
         )}
-        <StatCard
-          title="Active Users"
-          value={activeUsers}
-          icon={UserCheck}
-          description="Last 30 days"
-        />
-        <StatCard
-          title="Active Campaigns"
-          value={activeCampaigns}
-          icon={Megaphone}
-          description="Currently running"
-        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -155,7 +169,12 @@ export async function StatsSection({ role }: StatsSectionProps) {
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div
+        className={cn(
+          "grid gap-4 md:grid-cols-2",
+          role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-2"
+        )}
+      >
         <StatCard
           title="Approved"
           value={receiptStats.approved}
@@ -168,41 +187,45 @@ export async function StatsSection({ role }: StatsSectionProps) {
           icon={XCircle}
           description={`${rejectionRate}% rejection rate`}
         />
-        <StatCard
-          title="Total Rewards"
-          value={formatCurrency(rewardStats.totalAmount)}
-          icon={DollarSign}
-          trend={{ value: 0, isPositive: true }}
-        />
-        <StatCard
-          title="Pending Rewards"
-          value={formatCurrency(rewardStats.pendingAmount)}
-          icon={DollarSign}
-          description="Awaiting payment"
-        />
+        {role === "admin" && (
+          <>
+            <StatCard
+              title="Total Rewards"
+              value={formatCurrency(rewardStats.totalAmount)}
+              icon={DollarSign}
+              trend={{ value: 0, isPositive: true }}
+            />
+            <StatCard
+              title="Pending Rewards"
+              value={formatCurrency(rewardStats.pendingAmount)}
+              icon={DollarSign}
+              description="Awaiting payment"
+            />
+          </>
+        )}
       </div>
 
-      <div className={cn("grid gap-4", role === "admin" && "lg:grid-cols-2")}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <Trophy className="h-4 w-4" /> Top Campaigns
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {topCampaigns.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No campaign performance data available.</p>
-            ) : (
-              topCampaigns.map((campaign) => (
-                <div key={campaign.id} className="flex items-center justify-between text-sm">
-                  <div className="font-medium">{campaign.name}</div>
-                  <div className="text-muted-foreground">{formatCurrency(campaign.totalRewards)}</div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-        {role === "admin" && (
+      {role === "admin" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Trophy className="h-4 w-4" /> Top Campaigns
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {topCampaigns.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No campaign performance data available.</p>
+              ) : (
+                topCampaigns.map((campaign) => (
+                  <div key={campaign.id} className="flex items-center justify-between text-sm">
+                    <div className="font-medium">{campaign.name}</div>
+                    <div className="text-muted-foreground">{formatCurrency(campaign.totalRewards)}</div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">Referral Bonuses</CardTitle>
@@ -212,8 +235,8 @@ export async function StatsSection({ role }: StatsSectionProps) {
               <p className="text-sm text-muted-foreground">Total bonuses awarded through referrals</p>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
