@@ -363,7 +363,7 @@ export default function HomeScreen({ navigation }: Props) {
                   variant="titleMedium"
                   style={dynamicStyles.balanceCurrency}
                 >
-                  BCT$
+                  BTC$
                 </Text>
               </View>
 
@@ -457,7 +457,7 @@ export default function HomeScreen({ navigation }: Props) {
                   No receipts yet
                 </Text>
                 <Text variant="bodyMedium" style={dynamicStyles.emptySubtitle}>
-                  Upload your first receipt to start earning BCT$
+                  Upload your first receipt to start earning BTC$
                 </Text>
                 <Button
                   mode="contained"
@@ -574,7 +574,7 @@ export default function HomeScreen({ navigation }: Props) {
                   variant="bodyMedium"
                   style={dynamicStyles.referralSubtitle}
                 >
-                  Share your code and earn bonus BCT$ when friends join
+                  Share your code and earn bonus BTC$ when friends join
                 </Text>
               </View>
 

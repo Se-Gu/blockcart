@@ -13,10 +13,7 @@ const REFERRALS_TABLE = "referrals";
 type ReferralRewardRow = {
   bonus: number | null;
 };
-type ProfileRow = Pick<
-  Profile,
-  "referral_code" | "referred_by" | "bonus_total"
->;
+type ProfileRow = Pick<Profile, "referral_code" | "referred_by" | "bonus_total">;
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "Referral">;
 
@@ -55,7 +52,36 @@ export default function ReferralScreen(_props: Props) {
       }
 
       const profileData = profileResponse.data as ProfileRow | null;
-      setProfile(profileData ? { id: session.user.id, ...profileData } : null);
+      let resolvedReferralCode = profileData?.referral_code ?? null;
+
+      if (!resolvedReferralCode) {
+        const { data: generatedCode, error: ensureError } = await supabase.rpc<string>(
+          "ensure_referral_code",
+          { target_user_id: session.user.id },
+        );
+
+        if (ensureError) {
+          throw ensureError;
+        }
+
+        resolvedReferralCode = generatedCode ?? null;
+      }
+
+      if (profileData) {
+        setProfile({
+          id: session.user.id,
+          ...profileData,
+          referral_code: resolvedReferralCode,
+          bonus_total: profileData.bonus_total ?? null,
+        });
+      } else {
+        setProfile({
+          id: session.user.id,
+          referral_code: resolvedReferralCode,
+          referred_by: null,
+          bonus_total: null,
+        });
+      }
 
       const rewardRows =
         (rewardsResponse.data as ReferralRewardRow[] | null) ?? [];
@@ -155,13 +181,13 @@ export default function ReferralScreen(_props: Props) {
         <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">Bonuses earned from referrals</Text>
           <Text variant="headlineSmall" style={{ marginTop: 8 }}>
-            {bonusEarned.toFixed(2)} BCT$
+            {bonusEarned.toFixed(2)} BTC$
           </Text>
           {profile?.bonus_total ? (
             <Text
               style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
             >
-              Platform reported total: {profile.bonus_total.toFixed(2)} BCT$
+              Platform reported total: {profile.bonus_total.toFixed(2)} BTC$
             </Text>
           ) : null}
         </Card.Content>

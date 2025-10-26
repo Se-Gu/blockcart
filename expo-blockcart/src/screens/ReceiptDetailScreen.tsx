@@ -274,7 +274,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
                 return `$${Number(value).toFixed(2)}`;
               }
               if (field.key === "reward_amount") {
-                return `${Number(value).toFixed(2)} BCT$`;
+                return `${Number(value).toFixed(2)} BTC$`;
               }
               if (field.key === "receipt_date") {
                 const parsed = new Date(String(value));

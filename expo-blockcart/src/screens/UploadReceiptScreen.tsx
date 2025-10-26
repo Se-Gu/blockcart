@@ -243,7 +243,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             Upload Receipt
           </Text>
           <Text variant="bodyLarge" style={styles.subtitle}>
-            Capture a clear photo of your receipt to earn BCT$ rewards
+            Capture a clear photo of your receipt to earn BTC$ rewards
           </Text>
         </LinearGradient>
 

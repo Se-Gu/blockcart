@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Search, Filter, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -97,6 +97,17 @@ const assignmentStatusesForFilter = (
 
   return ["completed"]
 }
+
+const escapePostgrestOrTerm = (term: string): string =>
+  term
+    .replace(/\\/g, "\\\\")
+    .replace(/,/g, "\\,")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/\*/g, "\\*")
+
+const isReceiptStatus = (value: string): value is ReceiptStatus =>
+  ["pending", "pending_review", "approved", "rejected", "flagged", "error"].includes(value)
 
 function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
   const receipt = row.receipt
@@ -216,6 +227,7 @@ export default function ReceiptsPage() {
   const { user, userRole, loading } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
@@ -307,9 +319,9 @@ export default function ReceiptsPage() {
       }
 
       if (searchQuery.trim()) {
-        const term = `%${searchQuery.trim()}%`
+        const escapedTerm = escapePostgrestOrTerm(searchQuery.trim())
         query = query.or(
-          `receipts.id.ilike.${term},receipts.store.ilike.${term},receipts.location.ilike.${term},receipts.rejection_reason.ilike.${term}`,
+          `receipts.id.ilike.*${escapedTerm}*,receipts.store.ilike.*${escapedTerm}*,receipts.location.ilike.*${escapedTerm}*,receipts.rejection_reason.ilike.*${escapedTerm}*`,
         )
       }
 
@@ -371,6 +383,23 @@ export default function ReceiptsPage() {
     setReviewerFilter(user.id)
     setReviewerFilterInitialized(true)
   }, [reviewerFilterInitialized, user])
+
+  useEffect(() => {
+    const statusParam = searchParams.get("status")
+
+    if (!statusParam) {
+      return
+    }
+
+    if (statusParam === "all") {
+      setStatusFilter((current) => (current === "all" ? current : "all"))
+      return
+    }
+
+    if (isReceiptStatus(statusParam)) {
+      setStatusFilter((current) => (current === statusParam ? current : statusParam))
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (loading || reviewerFilterInitialized || user) {
@@ -651,8 +680,6 @@ export default function ReceiptsPage() {
     { label: "Pending Review", value: "pending_review" },
     { label: "Approved", value: "approved" },
     { label: "Rejected", value: "rejected" },
-    { label: "Flagged", value: "flagged" },
-    { label: "Error", value: "error" },
   ]
 
   const reviewerSelectOptions = useMemo(
