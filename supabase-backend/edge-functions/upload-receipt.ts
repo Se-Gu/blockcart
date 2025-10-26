@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { sendReviewerAssignmentEmail } from "./_shared/email.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -159,6 +161,16 @@ serve(async (req) => {
     if (existingAssignmentErr) throw existingAssignmentErr;
 
     let assignment = existingAssignment ?? null;
+    let createdNotificationAssignmentId: string | null = null;
+    const emailMetadata: Record<string, unknown> = {
+      receipt_date: receipt.receipt_date ?? null,
+      uploaded_at: receipt.created_at ?? null,
+      image_url: receipt.image_url,
+      bucket,
+      storage_path,
+      total: receipt.total ?? null,
+      store_name: receipt.store ?? null,
+    };
 
     if (assignment) {
       console.log("🔁 Reusing existing assignment:", assignment);
@@ -206,6 +218,58 @@ serve(async (req) => {
           ...insertedAssignment,
           reviewer: { email: nextReviewer.email },
         };
+
+        const { error: notificationErr } = await supabase
+          .from("reviewer_notifications")
+          .insert({
+            reviewer_id: nextReviewer.id,
+            receipt_id: receipt.id,
+            assignment_id: insertedAssignment.id,
+            metadata: emailMetadata,
+          });
+
+        if (notificationErr) {
+          console.error(
+            "⚠️ Failed to persist reviewer notification:",
+            notificationErr
+          );
+        } else {
+          createdNotificationAssignmentId = insertedAssignment.id;
+        }
+      }
+    }
+
+    if (assignment?.reviewer?.email) {
+      try {
+        await sendReviewerAssignmentEmail({
+          to: assignment.reviewer.email,
+          receipt: {
+            id: receipt.id,
+            user_id: receipt.user_id,
+            image_url: receipt.image_url,
+            receipt_date: receipt.receipt_date,
+            created_at: receipt.created_at,
+            status: receipt.status,
+          },
+          assignment: {
+            id: assignment.id,
+            assigned_at: assignment.assigned_at ?? null,
+          },
+          metadata: {
+            ...emailMetadata,
+            ...(assignment.reviewer?.email
+              ? { reviewer_email: assignment.reviewer.email }
+              : {}),
+            ...(createdNotificationAssignmentId
+              ? { notification_assignment_id: createdNotificationAssignmentId }
+              : {}),
+          },
+        });
+      } catch (emailErr) {
+        console.error(
+          "⚠️ Failed to send reviewer assignment email notification:",
+          emailErr
+        );
       }
     }
 

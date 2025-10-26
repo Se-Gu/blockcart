@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,8 +18,11 @@ import {
   Menu,
   X,
   ChevronDown,
+  Bell,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
@@ -32,6 +35,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useReviewerNotifications } from "@/lib/notifications";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -62,11 +72,43 @@ export function DashboardLayout({
   userName,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const pathname = usePathname();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const navItems = userRole === "admin" ? adminNavItems : reviewerNavItems;
   const displayName = userName || userEmail;
   const userInitial = (displayName?.[0] ?? "").toUpperCase() || "?";
+  const reviewerId = user?.id ?? null;
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    markNotificationsAsRead,
+    refresh: refreshNotifications,
+  } = useReviewerNotifications(reviewerId);
+  const wasNotificationsOpen = useRef(false);
+
+  useEffect(() => {
+    if (!notificationsOpen) {
+      return;
+    }
+
+    const unreadIds = notifications
+      .filter((notification) => !notification.read_at)
+      .map((notification) => notification.id);
+
+    if (unreadIds.length > 0) {
+      void markNotificationsAsRead(unreadIds);
+    }
+  }, [notificationsOpen, notifications, markNotificationsAsRead]);
+
+  useEffect(() => {
+    if (!notificationsOpen && wasNotificationsOpen.current) {
+      void refreshNotifications();
+    }
+
+    wasNotificationsOpen.current = notificationsOpen;
+  }, [notificationsOpen, refreshNotifications]);
 
   const handleLogout = async () => {
     try {
@@ -74,6 +116,54 @@ export function DashboardLayout({
     } catch (error) {
       console.error("Logout error:", error);
     }
+  };
+
+  const formatDateTime = (value: unknown) => {
+    if (!value || typeof value !== "string") {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed.toLocaleString();
+  };
+
+  const formatCurrency = (value: unknown) => {
+    if (typeof value !== "number" || Number.isNaN(value)) {
+      return null;
+    }
+
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(value);
+  };
+
+  const getMetadataString = (
+    metadata: Record<string, unknown> | undefined,
+    key: string
+  ) => {
+    if (!metadata) {
+      return undefined;
+    }
+
+    const value = metadata[key];
+    return typeof value === "string" ? value : undefined;
+  };
+
+  const getMetadataNumber = (
+    metadata: Record<string, unknown> | undefined,
+    key: string
+  ) => {
+    if (!metadata) {
+      return undefined;
+    }
+
+    const value = metadata[key];
+    return typeof value === "number" ? value : undefined;
   };
 
   return (
@@ -174,6 +264,121 @@ export function DashboardLayout({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1" />
+          {userRole === "reviewer" && (
+            <Popover
+              open={notificationsOpen}
+              onOpenChange={(open) => setNotificationsOpen(open)}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative rounded-full border border-border"
+                  aria-label="Reviewer notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="border-b border-border px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">
+                    Notifications
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {unreadCount > 0
+                      ? `${unreadCount} new assignment${unreadCount === 1 ? "" : "s"}`
+                      : "No unread assignments"}
+                  </p>
+                </div>
+                <ScrollArea className="max-h-80">
+                  <div className="space-y-2 p-3">
+                    {notificationsLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading notifications...
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="py-6 text-center text-sm text-muted-foreground">
+                        You're all caught up.
+                      </div>
+                    ) : (
+                      notifications.map((notification) => {
+                        const metadataStore = getMetadataString(
+                          notification.metadata,
+                          "store_name"
+                        );
+                        const receiptLabel =
+                          notification.receipt?.store_name ||
+                          metadataStore ||
+                          `Receipt ${notification.receipt_id}`;
+                        const receiptDate =
+                          notification.receipt?.receipt_date ||
+                          getMetadataString(
+                            notification.metadata,
+                            "receipt_date"
+                          ) ||
+                          null;
+                        const uploadedAt =
+                          getMetadataString(
+                            notification.metadata,
+                            "uploaded_at"
+                          ) ||
+                          notification.created_at;
+                        const totalAmount =
+                          notification.receipt?.total_amount ??
+                          getMetadataNumber(notification.metadata, "total");
+
+                        return (
+                          <Link
+                            key={notification.id}
+                            href={`/dashboard/receipts/${notification.receipt_id}`}
+                            className="block rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-left text-sm transition-colors hover:border-border hover:bg-accent/60"
+                            onClick={() => setNotificationsOpen(false)}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-foreground">
+                                Receipt assigned
+                              </span>
+                              {notification.read_at ? (
+                                <span className="text-[10px] uppercase text-muted-foreground">
+                                  Read
+                                </span>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px] uppercase">
+                                  New
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {receiptLabel}
+                            </p>
+                            {receiptDate && (
+                              <p className="text-xs text-muted-foreground">
+                                Purchase date: {formatDateTime(receiptDate) ?? receiptDate}
+                              </p>
+                            )}
+                            {typeof totalAmount === "number" && !Number.isNaN(totalAmount) && (
+                              <p className="text-xs text-muted-foreground">
+                                Total: {formatCurrency(totalAmount) ?? totalAmount}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Assigned: {formatDateTime(uploadedAt) ?? uploadedAt}
+                            </p>
+                          </Link>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

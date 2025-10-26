@@ -69,6 +69,44 @@ export interface ReceiptReview {
   } | null;
 }
 
+export interface ReviewerNotificationRecord {
+  id: string;
+  reviewer_id: string;
+  receipt_id: string;
+  assignment_id: string;
+  created_at: string;
+  read_at?: string | null;
+  metadata?: Record<string, unknown> | null;
+  receipt?: {
+    id: string;
+    store?: string | null;
+    total?: number | string | null;
+    receipt_date?: string | null;
+    status?: ReceiptStatus | null;
+    created_at?: string | null;
+    image_url?: string | null;
+  } | null;
+}
+
+export interface ReviewerNotification {
+  id: string;
+  reviewer_id: string;
+  receipt_id: string;
+  assignment_id: string;
+  created_at: string;
+  read_at: string | null;
+  metadata: Record<string, unknown>;
+  receipt?: {
+    id: string;
+    store_name: string | null;
+    total_amount: number;
+    receipt_date: string | null;
+    status: ReceiptStatus | null;
+    created_at: string | null;
+    image_url: string | null;
+  };
+}
+
 export interface Campaign {
   id: string;
   brand: string;
