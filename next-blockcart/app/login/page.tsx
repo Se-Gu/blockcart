@@ -57,8 +57,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center bg-muted p-6">
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-muted to-background" aria-hidden />
+      <Card className="relative w-full max-w-md border border-border/70 shadow-xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Blockcart Admin</CardTitle>
           <CardDescription>
@@ -91,7 +92,9 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-foreground">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -102,7 +105,9 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-foreground">
+                  Password
+                </Label>
                 <Input
                   id="password"
                   type="password"
