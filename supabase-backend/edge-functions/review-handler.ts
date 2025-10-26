@@ -112,10 +112,17 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL"),
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error(
+        "[review-handler] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars",
+      );
+      throw new Error("Service configuration error");
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const hasReviewedFields = reviewed_fields !== undefined;
     const sanitizedFields = hasReviewedFields
@@ -245,16 +252,16 @@ serve(async (req) => {
 
     if (approved) {
       try {
+        const rewardUrl = `${supabaseUrl}/functions/v1/reward-handler`;
         const rewardResponse = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/reward-handler`,
+          rewardUrl,
           {
             method: "POST",
             headers: {
               ...corsHeaders,
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get(
-                "SUPABASE_SERVICE_ROLE_KEY",
-              )}`,
+              apikey: serviceRoleKey,
+              Authorization: `Bearer ${serviceRoleKey}`,
             },
             body: JSON.stringify({
               receipt_id,

@@ -27,6 +27,14 @@ import { useErrorHandler } from "../hooks/useErrorHandler";
 import { colors, spacing, borderRadius } from "../theme/colors";
 
 const PAGE_LIMIT = 20;
+const RECEIPT_STATUSES: ReceiptStatus[] = [
+  "pending",
+  "pending_review",
+  "approved",
+  "rejected",
+  "flagged",
+  "error",
+];
 
 type ReceiptListItem = Pick<
   Receipt,
@@ -77,6 +85,7 @@ export default function ReceiptListScreen({ navigation }: Props) {
         .from("receipts")
         .select("id, created_at, store, total, status, receipt_date")
         .eq("user_id", session.user.id)
+        .in("status", RECEIPT_STATUSES)
         .order("created_at", { ascending: false })
         .limit(PAGE_LIMIT);
 

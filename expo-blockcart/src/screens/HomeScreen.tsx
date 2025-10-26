@@ -24,11 +24,19 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useErrorHandler } from "../hooks/useErrorHandler";
 import type { AppTabParamList } from "../navigation/MainNavigator";
-import type { Receipt, UserBalance } from "../types";
+import type { Receipt, ReceiptStatus, UserBalance } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import { colors, spacing, borderRadius } from "../theme/colors";
 
 const MAX_RECENT_RECEIPTS = 3;
+const RECEIPT_STATUSES: ReceiptStatus[] = [
+  "pending",
+  "pending_review",
+  "approved",
+  "rejected",
+  "flagged",
+  "error",
+];
 
 type BalanceRow = Pick<UserBalance, "total_balance">;
 type RecentReceiptRow = Pick<
@@ -73,6 +81,7 @@ export default function HomeScreen({ navigation }: Props) {
             "id, created_at, store, total, status, extracted_fields, location, payment_method, receipt_date"
           )
           .eq("user_id", session.user.id)
+          .in("status", RECEIPT_STATUSES)
           .order("created_at", { ascending: false })
           .limit(MAX_RECENT_RECEIPTS),
       ]);

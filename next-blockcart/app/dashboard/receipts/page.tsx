@@ -84,6 +84,20 @@ const statusStyles: Record<ReceiptStatus, string> = {
   error: "bg-destructive/10 text-destructive hover:bg-destructive/20",
 }
 
+const assignmentStatusesForFilter = (
+  status: ReceiptStatus | "all",
+): ReceiptAssignmentStatus[] => {
+  if (status === "all") {
+    return ["assigned", "completed", "returned"]
+  }
+
+  if (status === "pending" || status === "pending_review") {
+    return ["assigned", "returned"]
+  }
+
+  return ["completed"]
+}
+
 function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
   const receipt = row.receipt
 
@@ -246,6 +260,8 @@ export default function ReceiptsPage() {
 
     setIsLoading(true)
     try {
+      const assignmentStatuses = assignmentStatusesForFilter(statusFilter)
+
       let query = supabase
         .from("receipt_assignments")
         .select(
@@ -255,7 +271,7 @@ export default function ReceiptsPage() {
           )`,
           { count: "exact" },
         )
-        .eq("status", "assigned")
+        .in("status", assignmentStatuses)
         .is("released_at", null)
         .order("created_at", { referencedTable: "receipts", ascending: false })
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
