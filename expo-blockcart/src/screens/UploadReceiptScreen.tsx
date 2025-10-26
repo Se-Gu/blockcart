@@ -126,7 +126,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
 
       const response = await fetch(selectedImage.uri);
       const blob = await response.blob();
-      const path = `receipts/${session.user.id}/${uuidv4()}.jpg`;
+      const path = `${session.user.id}/${uuidv4()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from("receipts")
