@@ -51,6 +51,20 @@ CREATE TABLE public.receipt_assignments (
   CONSTRAINT receipt_assignments_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id),
   CONSTRAINT receipt_assignments_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id)
 );
+CREATE TABLE public.reviewer_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  reviewer_id uuid NOT NULL,
+  receipt_id uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  read_at timestamp with time zone,
+  CONSTRAINT reviewer_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT reviewer_notifications_assignment_unique UNIQUE (assignment_id),
+  CONSTRAINT reviewer_notifications_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.receipt_assignments(id) ON DELETE CASCADE,
+  CONSTRAINT reviewer_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id) ON DELETE CASCADE,
+  CONSTRAINT reviewer_notifications_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id) ON DELETE CASCADE
+);
 CREATE TABLE public.receipt_reviews (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   receipt_id uuid NOT NULL,
