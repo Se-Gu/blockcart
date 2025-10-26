@@ -66,6 +66,9 @@ function ReceiptsStackNavigator() {
                 .getParent()
                 ?.navigate("Profile", { screen: "ProfileMain" })
             }
+            onNavigateToReceipt={(receiptId) =>
+              headerNavigation.navigate("ReceiptDetail", { receiptId })
+            }
           />
         ),
       })}
@@ -106,6 +109,14 @@ function ProfileStackNavigator() {
               headerNavigation
                 .getParent()
                 ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+            onNavigateToReceipt={(receiptId) =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Receipts", {
+                  screen: "ReceiptDetail",
+                  params: { receiptId },
+                })
             }
           />
         ),
@@ -150,6 +161,12 @@ export default function MainNavigator() {
                     onBackPress={() => navigation.goBack()}
                     onNavigateToProfile={() =>
                       navigation.navigate("Profile", { screen: "ProfileMain" })
+                    }
+                    onNavigateToReceipt={(receiptId) =>
+                      navigation.navigate("Receipts", {
+                        screen: "ReceiptDetail",
+                        params: { receiptId },
+                      })
                     }
                   />
                 ),

@@ -129,6 +129,9 @@ Create a `.env.local` file for local development:
 SUPABASE_URL=http://localhost:54321
 SUPABASE_ANON_KEY=your-local-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-local-service-role-key
+# Optional: configure transactional email delivery for receipt updates
+# RESEND_API_KEY=your-resend-api-key
+# RESEND_FROM_EMAIL=Blockcart <no-reply@yourdomain.com>
 ```
 
 For production, set these in your Supabase Dashboard under **Settings > API**:
@@ -137,6 +140,9 @@ For production, set these in your Supabase Dashboard under **Settings > API**:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-production-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-production-service-role-key
+# Optional: configure transactional email delivery for receipt updates
+# RESEND_API_KEY=your-resend-api-key
+# RESEND_FROM_EMAIL=Blockcart <no-reply@yourdomain.com>
 ```
 
 ## Edge Functions Overview

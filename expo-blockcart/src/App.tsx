@@ -29,6 +29,7 @@ import MainNavigator from "./navigation/MainNavigator";
 import LoginScreen from "./screens/LoginScreen";
 import { supabase } from "./lib/supabase";
 import { AuthContext } from "./context/AuthContext";
+import { NotificationsProvider } from "./context/NotificationsContext";
 import LoadingView from "./components/LoadingView";
 import { ToastProvider } from "./components/ToastProvider";
 import type { Receipt } from "./types";
@@ -235,9 +236,11 @@ export default function App() {
       <SafeAreaProvider>
         <ToastProvider>
           <AuthContext.Provider value={authContextValue}>
-            <NavigationContainer theme={navigationTheme}>
-              {session ? <MainNavigator /> : <LoginScreen />}
-            </NavigationContainer>
+            <NotificationsProvider>
+              <NavigationContainer theme={navigationTheme}>
+                {session ? <MainNavigator /> : <LoginScreen />}
+              </NavigationContainer>
+            </NotificationsProvider>
           </AuthContext.Provider>
         </ToastProvider>
       </SafeAreaProvider>
