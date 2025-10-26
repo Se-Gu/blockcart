@@ -54,6 +54,7 @@ export default function ReceiptDetailScreen({ route }: Props) {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,37 +140,82 @@ export default function ReceiptDetailScreen({ route }: Props) {
     [extractedFields]
   );
 
-  const resolvedImageUrl = useMemo(() => {
-    if (!receipt?.image_url) {
-      return null;
-    }
+  useEffect(() => {
+    let isActive = true;
 
-    const rawUrl = receipt.image_url;
-    const receiptsMatch = rawUrl.match(/receipts\/(.+)$/);
+    const resolveImageUrl = async () => {
+      if (!receipt?.image_url) {
+        if (isActive) {
+          setResolvedImageUrl(null);
+        }
+        return;
+      }
 
-    if (receiptsMatch) {
-      const objectPath = receiptsMatch[1];
-      const { data } = supabase.storage
+      if (isActive) {
+        setResolvedImageUrl(null);
+      }
+
+      const rawUrl = receipt.image_url;
+      const sanitized = rawUrl.split(/[?#]/)[0];
+      const receiptsIndex = sanitized.lastIndexOf("receipts/");
+      let objectPath: string | null = null;
+
+      if (receiptsIndex !== -1) {
+        const extracted = sanitized.slice(receiptsIndex + "receipts/".length);
+        objectPath = extracted ? extracted.replace(/^\/+/, "") : null;
+      } else if (!sanitized.startsWith("http")) {
+        const trimmed = sanitized.replace(/^\/+/, "");
+        objectPath = trimmed.startsWith("receipts/")
+          ? trimmed.replace(/^receipts\//, "")
+          : trimmed;
+      }
+
+      if (!objectPath) {
+        if (isActive) {
+          setResolvedImageUrl(rawUrl);
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.storage
+          .from("receipts")
+          .createSignedUrl(objectPath, 60 * 60);
+
+        if (!isActive) {
+          return;
+        }
+
+        if (error) {
+          console.warn("Failed to create signed receipt URL", error);
+        }
+
+        if (data?.signedUrl) {
+          setResolvedImageUrl(data.signedUrl);
+          return;
+        }
+      } catch (signError) {
+        if (isActive) {
+          console.warn("Unexpected error creating signed receipt URL", signError);
+        }
+      }
+
+      if (!isActive) {
+        return;
+      }
+
+      const { data: publicData } = supabase.storage
         .from("receipts")
         .getPublicUrl(objectPath);
-      if (data?.publicUrl) {
-        return data.publicUrl;
-      }
-    }
 
-    if (!rawUrl.startsWith("http")) {
-      const normalized = rawUrl.startsWith("receipts/")
-        ? rawUrl.replace(/^receipts\//, "")
-        : rawUrl;
-      const { data } = supabase.storage
-        .from("receipts")
-        .getPublicUrl(normalized);
-      if (data?.publicUrl) {
-        return data.publicUrl;
-      }
-    }
+      setResolvedImageUrl(publicData?.publicUrl ?? rawUrl);
+    };
 
-    return rawUrl;
+    resolveImageUrl();
+
+    return () => {
+      isActive = false;
+    };
   }, [receipt?.image_url]);
 
   if (loading && !receipt) {
