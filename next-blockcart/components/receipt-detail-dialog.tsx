@@ -2,24 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
-import { X, Check, RefreshCw, Loader2 } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { X, Check, RefreshCw, Loader2, Copy } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import type {
-  Receipt,
-  ReviewedFieldUpdates,
-  ReceiptStatus,
-  ReceiptReview,
-} from "@/lib/types"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type { Receipt, ReviewedFieldUpdates, ReceiptStatus, ReceiptReview } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { getSignedReceiptUrl } from "@/lib/storage"
 
@@ -150,8 +141,7 @@ function buildReviewedFields(form: FormState): ReviewedFieldUpdates {
     receipt_date: form.receipt_date.trim() || null,
     receipt_time: form.receipt_time.trim() || null,
     payment_method: form.payment_method.trim() || null,
-    total:
-      totalNumber !== null && !Number.isNaN(totalNumber) ? Number(totalNumber.toFixed(2)) : null,
+    total: totalNumber !== null && !Number.isNaN(totalNumber) ? Number(totalNumber.toFixed(2)) : null,
   }
 }
 
@@ -173,11 +163,7 @@ function formatParsedComparisonValue(field: keyof FormState, value: string) {
   return value
 }
 
-function getStringField(
-  source: Record<string, unknown> | null | undefined,
-  key: string,
-  fallback?: string | null,
-) {
+function getStringField(source: Record<string, unknown> | null | undefined, key: string, fallback?: string | null) {
   if (source && typeof source === "object" && key in source) {
     const value = (source as Record<string, unknown>)[key]
     if (typeof value === "string") return value
@@ -225,29 +211,14 @@ export function ReceiptDetailDialog({
       return { ...emptyForm }
     }
 
-    const extractedFields = receipt.extracted_fields as
-      | Record<string, unknown>
-      | null
-      | undefined
+    const extractedFields = receipt.extracted_fields as Record<string, unknown> | null | undefined
 
     return {
       store: getStringField(extractedFields, "store", receipt.store_name),
       location: getStringField(extractedFields, "location", receipt.location),
-      receipt_date: getStringField(
-        extractedFields,
-        "receipt_date",
-        receipt.purchase_date,
-      ),
-      receipt_time: getStringField(
-        extractedFields,
-        "receipt_time",
-        receipt.receipt_time,
-      ),
-      payment_method: getStringField(
-        extractedFields,
-        "payment_method",
-        receipt.payment_method,
-      ),
+      receipt_date: getStringField(extractedFields, "receipt_date", receipt.purchase_date),
+      receipt_time: getStringField(extractedFields, "receipt_time", receipt.receipt_time),
+      payment_method: getStringField(extractedFields, "payment_method", receipt.payment_method),
       total: getNumericField(extractedFields, "total", receipt.total_amount),
     }
   }, [receipt])
@@ -269,9 +240,7 @@ export function ReceiptDetailDialog({
         "location",
         getStringField(extractedFields, "location", receipt.location),
       ),
-      receipt_date: normalizeDateInput(
-        getStringField(reviewedFields, "receipt_date", receipt.purchase_date),
-      ),
+      receipt_date: normalizeDateInput(getStringField(reviewedFields, "receipt_date", receipt.purchase_date)),
       receipt_time: getStringField(
         reviewedFields,
         "receipt_time",
@@ -318,8 +287,7 @@ export function ReceiptDetailDialog({
   const mergedOcrLoading = reRunLoading || localOcrLoading
   const approveButtonBusy = activeAction === "approve"
   const rejectButtonBusy = activeAction === "reject"
-  const assignmentLocked =
-    !!receipt?.assignment_status && receipt.assignment_status !== "assigned"
+  const assignmentLocked = !!receipt?.assignment_status && receipt.assignment_status !== "assigned"
 
   const handleApplyParsedValue = (field: keyof FormState) => {
     const parsedValue = parsedValues[field]
@@ -366,257 +334,252 @@ export function ReceiptDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Receipt Details</span>
+          <DialogTitle className="flex items-center justify-between text-xl">
+            <span>Receipt Review</span>
             {getStatusBadge(receipt.status)}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
           <div className="space-y-4">
-            <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border border-border bg-muted">
-              <Image
-                src={
-                  resolvedImageUrl ??
-                  receipt.image_url ??
-                  "/placeholder.svg?height=600&width=450&query=receipt"
-                }
-                alt="Receipt"
-                fill
-                className="object-contain"
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={handleReRunOcr}
-              disabled={mergedOcrLoading}
-              className="w-full"
-            >
-              {mergedOcrLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Re-running OCR
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Re-run OCR
-                </>
-              )}
-            </Button>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Receipt Image</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border border-border bg-muted">
+                  <Image
+                    src={
+                      resolvedImageUrl ??
+                      receipt.image_url ??
+                      ("/placeholder.svg?height=600&width=450&query=receipt" || "/placeholder.svg")
+                    }
+                    alt="Receipt"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleReRunOcr}
+                  disabled={mergedOcrLoading}
+                  className="mt-4 w-full bg-transparent"
+                >
+                  {mergedOcrLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Re-running OCR
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Re-run OCR
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Receipt Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Submitted By
+                  </Label>
+                  <p className="mt-1 text-sm font-medium">{receipt.user_name ?? "Unknown user"}</p>
+                  <p className="text-xs text-muted-foreground">{receipt.user_email ?? "No email"}</p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Submitted
+                    </Label>
+                    <p className="mt-1 text-sm font-medium">{formatLongDateTime(receipt.created_at)}</p>
+                  </div>
+                  {receipt.reviewer_name && (
+                    <div>
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Reviewed By
+                      </Label>
+                      <p className="mt-1 text-sm font-medium">{receipt.reviewer_name}</p>
+                      {receipt.reviewed_at && (
+                        <p className="text-xs text-muted-foreground">{formatLongDateTime(receipt.reviewed_at)}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {receipt.rejection_reason && (
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                      Previous Comment
+                    </Label>
+                    <p className="mt-1 text-sm leading-relaxed">{receipt.rejection_reason}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-muted-foreground">User</Label>
-                <p className="text-sm font-medium">{receipt.user_name ?? "Unknown user"}</p>
-                <p className="text-xs text-muted-foreground">{receipt.user_email ?? "No email"}</p>
-              </div>
-
-              <div>
-                <Label className="text-muted-foreground">Store</Label>
-                <p className="text-sm font-medium">{receipt.store_name ?? "—"}</p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <Label className="text-muted-foreground">Total Amount</Label>
-                  <p className="text-sm font-medium">
-                    ${receipt.total_amount.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Purchase Date</Label>
-                  <p className="text-sm font-medium">{formatLongDate(receipt.purchase_date)}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <Label className="text-muted-foreground">Location</Label>
-                  <p className="text-sm font-medium">{receipt.location ?? "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Payment Method</Label>
-                  <p className="text-sm font-medium">{receipt.payment_method ?? "—"}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <Label className="text-muted-foreground">Receipt Time</Label>
-                  <p className="text-sm font-medium">{receipt.receipt_time ?? "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Submitted</Label>
-                  <p className="text-sm font-medium">{formatLongDateTime(receipt.created_at)}</p>
-                </div>
-              </div>
-
-              {receipt.reviewer_name && (
-                <div>
-                  <Label className="text-muted-foreground">Reviewed By</Label>
-                  <p className="text-sm font-medium">{receipt.reviewer_name}</p>
-                  {receipt.reviewed_at && (
-                    <p className="text-xs text-muted-foreground">
-                      {formatLongDateTime(receipt.reviewed_at)}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {receipt.rejection_reason && (
-                <div>
-                  <Label className="text-muted-foreground">Previous Comment</Label>
-                  <p className="text-sm font-medium text-destructive">{receipt.rejection_reason}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="text-sm font-semibold">Review Parsed Fields</h3>
-              <p className="text-xs text-muted-foreground">
-                Compare the parsed values against your corrections and copy them with
-                a single click.
-              </p>
-              <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Review & Correct Fields</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Compare OCR-parsed values with your corrections. Click "Use Parsed" to copy the extracted value.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 {reviewFieldConfigs.map((field) => {
                   const parsedValue = parsedValues[field.key]
-                  const displayValue = formatParsedComparisonValue(
-                    field.key,
-                    parsedValue,
-                  )
+                  const displayValue = formatParsedComparisonValue(field.key, parsedValue)
 
                   return (
-                    <div key={field.key} className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label htmlFor={`corrected-${field.key}`}>
+                    <div key={field.key} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`corrected-${field.key}`} className="text-sm font-semibold">
                           {field.label}
                         </Label>
                         <Button
                           type="button"
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
                           onClick={() => handleApplyParsedValue(field.key)}
                           disabled={!parsedValue}
+                          className="h-8 gap-1.5"
                         >
-                          Use parsed
+                          <Copy className="h-3.5 w-3.5" />
+                          Use Parsed
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 p-3 text-sm">
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="space-y-1.5">
                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Parsed
+                            OCR Extracted
                           </p>
-                          <p className="mt-1 break-words font-medium text-foreground">
-                            {displayValue}
-                          </p>
+                          <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/50 p-4">
+                            <p className="text-sm font-medium leading-relaxed">{displayValue}</p>
+                          </div>
                         </div>
-                        <Input
-                          id={`corrected-${field.key}`}
-                          type={field.type}
-                          step={field.step}
-                          value={formState[field.key]}
-                          onChange={(event) =>
-                            setFormState((prev) => ({
-                              ...prev,
-                              [field.key]: event.target.value,
-                            }))
-                          }
-                        />
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Corrected Value
+                          </p>
+                          <Input
+                            id={`corrected-${field.key}`}
+                            type={field.type}
+                            step={field.step}
+                            value={formState[field.key]}
+                            onChange={(event) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                [field.key]: event.target.value,
+                              }))
+                            }
+                            className="h-12 text-sm"
+                          />
+                        </div>
                       </div>
                     </div>
                   )
                 })}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            <div className="space-y-2 border-t border-border pt-4">
-              <Label htmlFor="review-comment">Reviewer Comments</Label>
-              <Textarea
-                id="review-comment"
-                placeholder="Add notes for this review..."
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                rows={4}
-              />
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Reviewer Comments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  id="review-comment"
+                  placeholder="Add notes or reasons for approval/rejection..."
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                  rows={4}
+                  className="resize-none text-sm"
+                />
+              </CardContent>
+            </Card>
 
-            <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="text-sm font-semibold">Review History</h3>
-              {reviewsLoading ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading review history...
-                </p>
-              ) : reviewsError ? (
-                <p className="text-sm text-destructive">{reviewsError}</p>
-              ) : reviews.length > 0 ? (
-                <ul className="space-y-3">
-                  {reviews.map((review, index) => {
-                    const trimmedComment = review.comment?.trim()
-                    return (
-                      <li
-                        key={`${review.created_at}-${index}`}
-                        className="space-y-1 rounded-md border border-border p-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {formatReviewAction(review.action)}
-                          </span>
-                          <span>{formatLongDateTime(review.created_at)}</span>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Review History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reviewsLoading ? (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading review history...
+                  </p>
+                ) : reviewsError ? (
+                  <p className="text-sm text-destructive">{reviewsError}</p>
+                ) : reviews.length > 0 ? (
+                  <div className="space-y-3">
+                    {reviews.map((review, index) => {
+                      const trimmedComment = review.comment?.trim()
+                      return (
+                        <div
+                          key={`${review.created_at}-${index}`}
+                          className="space-y-2 rounded-lg border border-border bg-muted/30 p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-sm font-semibold">{formatReviewAction(review.action)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatLongDateTime(review.created_at)}
+                            </span>
+                          </div>
+                          {review.reviewer?.email && (
+                            <p className="text-xs text-muted-foreground">{review.reviewer.email}</p>
+                          )}
+                          {trimmedComment && (
+                            <p className="text-sm leading-relaxed text-foreground">{trimmedComment}</p>
+                          )}
                         </div>
-                        {review.reviewer?.email && (
-                          <p className="text-xs text-muted-foreground">{review.reviewer.email}</p>
-                        )}
-                        {trimmedComment && (
-                          <p className="text-sm leading-relaxed text-foreground">
-                            {trimmedComment}
-                          </p>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">No review history yet.</p>
-              )}
-            </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No review history yet.</p>
+                )}
+              </CardContent>
+            </Card>
 
             {(receipt.status === "pending" || receipt.status === "pending_review") && (
-              <div className="space-y-3 border-t border-border pt-4">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    onClick={handleApprove}
-                    disabled={mergedActionLoading || assignmentLocked}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    {approveButtonBusy ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="mr-2 h-4 w-4" />
-                    )}
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={handleReject}
-                    disabled={
-                      mergedActionLoading || !comment.trim() || assignmentLocked
-                    }
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    {rejectButtonBusy ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <X className="mr-2 h-4 w-4" />
-                    )}
-                    Reject
-                  </Button>
-                </div>
+              <div className="flex gap-3 border-t border-border pt-6">
+                <Button
+                  onClick={handleApprove}
+                  disabled={mergedActionLoading || assignmentLocked}
+                  className="flex-1 h-11 bg-green-600 hover:bg-green-700"
+                  size="lg"
+                >
+                  {approveButtonBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Approve Receipt
+                </Button>
+                <Button
+                  onClick={handleReject}
+                  disabled={mergedActionLoading || !comment.trim() || assignmentLocked}
+                  variant="destructive"
+                  className="flex-1 h-11"
+                  size="lg"
+                >
+                  {rejectButtonBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="mr-2 h-4 w-4" />
+                  )}
+                  Reject Receipt
+                </Button>
               </div>
             )}
           </div>
