@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import type { Receipt, ReceiptReview, ReviewedFieldUpdates } from "@/lib/types"
+import type { Receipt, ReceiptReview, ReviewedFieldUpdates, ReceiptItem } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
@@ -50,6 +50,7 @@ export default function ReceiptReviewPage() {
   const [paymentMethod, setPaymentMethod] = useState("")
   const [total, setTotal] = useState("")
   const [comment, setComment] = useState("")
+  const [items, setItems] = useState<ReceiptItem[]>([])
 
   useEffect(() => {
     const fetchReceipt = async () => {
@@ -130,6 +131,35 @@ export default function ReceiptReviewPage() {
             (extractedFields?.total as number)?.toString() ||
             "",
         )
+
+        // Extract items from reviewed_fields or extracted_fields
+        let extractedItems: ReceiptItem[] = []
+        if (reviewedFields && typeof reviewedFields === "object" && "items" in reviewedFields) {
+          const reviewedItems = reviewedFields.items
+          if (Array.isArray(reviewedItems)) {
+            extractedItems = reviewedItems.filter((item): item is ReceiptItem => 
+              typeof item === "object" &&
+              item !== null &&
+              "name" in item &&
+              typeof item.name === "string" &&
+              "price" in item &&
+              typeof item.price === "number"
+            )
+          }
+        } else if (extractedFields && typeof extractedFields === "object" && "items" in extractedFields) {
+          const ocrItems = extractedFields.items
+          if (Array.isArray(ocrItems)) {
+            extractedItems = ocrItems.filter((item): item is ReceiptItem => 
+              typeof item === "object" &&
+              item !== null &&
+              "name" in item &&
+              typeof item.name === "string" &&
+              "price" in item &&
+              typeof item.price === "number"
+            )
+          }
+        }
+        setItems(extractedItems)
       } catch (error) {
         console.error("Failed to load receipt", error)
         toast({
@@ -195,6 +225,7 @@ export default function ReceiptReviewPage() {
         receipt_time: receiptTime || null,
         payment_method: paymentMethod || null,
         total: total ? Number(total) : null,
+        items: items.length > 0 ? items : null,
       }
 
       try {
@@ -241,6 +272,7 @@ export default function ReceiptReviewPage() {
       receiptTime,
       paymentMethod,
       total,
+      items,
       comment,
       supabase,
       toast,
@@ -599,6 +631,110 @@ export default function ReceiptReviewPage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Receipt Items</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Items extracted from the receipt. Edit names and prices as needed.
+                  </p>
+                  {items.length > 0 ? (
+                    <div className="space-y-3">
+                      {items.map((item, index) => (
+                        <div key={index} className="grid gap-3 rounded-lg border border-border bg-card p-4">
+                          <div className="grid gap-3 sm:grid-cols-[1fr_100px]">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Item Name
+                              </Label>
+                              <Input
+                                value={item.name}
+                                onChange={(event) => {
+                                  const newItems = [...items]
+                                  newItems[index] = { ...item, name: event.target.value }
+                                  setItems(newItems)
+                                }}
+                                className="h-10 text-sm"
+                                placeholder="Item name"
+                                disabled={isReadOnly}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Price
+                              </Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={item.price}
+                                onChange={(event) => {
+                                  const newItems = [...items]
+                                  newItems[index] = { ...item, price: Number(event.target.value) || 0 }
+                                  setItems(newItems)
+                                }}
+                                className="h-10 text-sm"
+                                placeholder="0.00"
+                                disabled={isReadOnly}
+                              />
+                            </div>
+                          </div>
+                          {item.brand && (
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Brand
+                              </Label>
+                              <Input
+                                value={item.brand}
+                                onChange={(event) => {
+                                  const newItems = [...items]
+                                  newItems[index] = { ...item, brand: event.target.value || null }
+                                  setItems(newItems)
+                                }}
+                                className="h-10 text-sm"
+                                placeholder="Brand name"
+                                disabled={isReadOnly}
+                              />
+                            </div>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newItems = items.filter((_, i) => i !== index)
+                              setItems(newItems)
+                            }}
+                            className="w-full text-destructive hover:text-destructive"
+                            disabled={isReadOnly}
+                          >
+                            <X className="mr-2 h-4 w-4" />
+                            Remove Item
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newItems = items.concat({
+                            name: "",
+                            brand: null,
+                            price: 0,
+                          })
+                          setItems(newItems)
+                        }}
+                        className="w-full"
+                        disabled={isReadOnly}
+                      >
+                        Add Item
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No items found in the receipt.</p>
+                  )}
                 </div>
 
                 <Separator />

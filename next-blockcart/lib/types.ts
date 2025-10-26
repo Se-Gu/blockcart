@@ -51,6 +51,12 @@ export interface Receipt {
   assignment_completed_at?: string | null;
 }
 
+export interface ReceiptItem {
+  name: string;
+  brand?: string | null;
+  price: number;
+}
+
 export interface ReviewedFieldUpdates {
   store?: string | null;
   location?: string | null;
@@ -58,6 +64,7 @@ export interface ReviewedFieldUpdates {
   receipt_time?: string | null;
   payment_method?: string | null;
   total?: number | null;
+  items?: ReceiptItem[] | null;
 }
 
 export interface ReceiptReview {

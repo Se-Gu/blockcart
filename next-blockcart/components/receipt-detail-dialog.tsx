@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { Receipt, ReviewedFieldUpdates, ReceiptStatus, ReceiptReview } from "@/lib/types"
+import type { Receipt, ReviewedFieldUpdates, ReceiptStatus, ReceiptReview, ReceiptItem } from "@/lib/types"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { getSignedReceiptUrl } from "@/lib/storage"
 
@@ -40,9 +40,18 @@ interface FormState {
   receipt_time: string
   payment_method: string
   total: string
+  items: ReceiptItem[]
 }
 
-type ParsedValues = Record<keyof FormState, string>
+type ParsedValues = {
+  store: string
+  location: string
+  receipt_date: string
+  receipt_time: string
+  payment_method: string
+  total: string
+  items: ReceiptItem[]
+}
 
 const reviewFieldConfigs: Array<{
   key: keyof FormState
@@ -111,6 +120,7 @@ const emptyForm: FormState = {
   receipt_time: "",
   payment_method: "",
   total: "",
+  items: [],
 }
 
 function normalizeDateInput(value?: string | null) {
@@ -142,6 +152,7 @@ function buildReviewedFields(form: FormState): ReviewedFieldUpdates {
     receipt_time: form.receipt_time.trim() || null,
     payment_method: form.payment_method.trim() || null,
     total: totalNumber !== null && !Number.isNaN(totalNumber) ? Number(totalNumber.toFixed(2)) : null,
+    items: form.items.length > 0 ? form.items : null,
   }
 }
 
@@ -213,6 +224,22 @@ export function ReceiptDetailDialog({
 
     const extractedFields = receipt.extracted_fields as Record<string, unknown> | null | undefined
 
+    // Extract items from extracted_fields
+    let items: ReceiptItem[] = []
+    if (extractedFields && typeof extractedFields === "object" && "items" in extractedFields) {
+      const extractedItems = extractedFields.items
+      if (Array.isArray(extractedItems)) {
+        items = extractedItems.filter((item): item is ReceiptItem => 
+          typeof item === "object" &&
+          item !== null &&
+          "name" in item &&
+          typeof item.name === "string" &&
+          "price" in item &&
+          typeof item.price === "number"
+        )
+      }
+    }
+
     return {
       store: getStringField(extractedFields, "store", receipt.store_name),
       location: getStringField(extractedFields, "location", receipt.location),
@@ -220,6 +247,7 @@ export function ReceiptDetailDialog({
       receipt_time: getStringField(extractedFields, "receipt_time", receipt.receipt_time),
       payment_method: getStringField(extractedFields, "payment_method", receipt.payment_method),
       total: getNumericField(extractedFields, "total", receipt.total_amount),
+      items,
     }
   }, [receipt])
 
@@ -232,6 +260,34 @@ export function ReceiptDetailDialog({
 
     const reviewedFields = receipt.reviewed_fields as Record<string, unknown> | null | undefined
     const extractedFields = receipt.extracted_fields as Record<string, unknown> | null | undefined
+
+    // Extract items from reviewed_fields or extracted_fields
+    let items: ReceiptItem[] = []
+    if (reviewedFields && typeof reviewedFields === "object" && "items" in reviewedFields) {
+      const reviewedItems = reviewedFields.items
+      if (Array.isArray(reviewedItems)) {
+        items = reviewedItems.filter((item): item is ReceiptItem => 
+          typeof item === "object" &&
+          item !== null &&
+          "name" in item &&
+          typeof item.name === "string" &&
+          "price" in item &&
+          typeof item.price === "number"
+        )
+      }
+    } else if (extractedFields && typeof extractedFields === "object" && "items" in extractedFields) {
+      const extractedItems = extractedFields.items
+      if (Array.isArray(extractedItems)) {
+        items = extractedItems.filter((item): item is ReceiptItem => 
+          typeof item === "object" &&
+          item !== null &&
+          "name" in item &&
+          typeof item.name === "string" &&
+          "price" in item &&
+          typeof item.price === "number"
+        )
+      }
+    }
 
     setFormState({
       store: getStringField(reviewedFields, "store", getStringField(extractedFields, "store", receipt.store_name)),
@@ -252,6 +308,7 @@ export function ReceiptDetailDialog({
         getStringField(extractedFields, "payment_method", receipt.payment_method),
       ),
       total: getNumericField(reviewedFields, "total", receipt.total_amount),
+      items,
     })
     setComment(receipt.rejection_reason ?? "")
   }, [receipt])
@@ -440,50 +497,155 @@ export function ReceiptDetailDialog({
                   const parsedValue = parsedValues[field.key]
                   const displayValue = formatParsedComparisonValue(field.key, parsedValue)
 
+                  // Insert Items section before Total field
+                  const renderItemsBeforeTotal = field.key === "total"
+
                   return (
-                    <div key={field.key} className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`corrected-${field.key}`} className="text-sm font-semibold">
-                          {field.label}
-                        </Label>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleApplyParsedValue(field.key)}
-                          disabled={!parsedValue}
-                          className="h-8 gap-1.5"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                          Use Parsed
-                        </Button>
-                      </div>
-                      <div className="grid gap-3 lg:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            OCR Extracted
-                          </p>
-                          <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/50 p-4">
-                            <p className="text-sm font-medium leading-relaxed">{displayValue}</p>
+                    <div key={field.key}>
+                      {renderItemsBeforeTotal && (
+                        <div className="mb-6">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-semibold">Receipt Items</Label>
+                            </div>
+                            {parsedValues.items.length > 0 || formState.items.length > 0 ? (
+                              <div className="space-y-3">
+                                {formState.items.map((item, index) => (
+                                  <div key={index} className="grid gap-3 rounded-lg border border-border bg-card p-4">
+                                    <div className="grid gap-3 sm:grid-cols-[1fr_100px]">
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          Item Name
+                                        </Label>
+                                        <Input
+                                          value={item.name}
+                                          onChange={(event) => {
+                                            const newItems = [...formState.items]
+                                            newItems[index] = { ...item, name: event.target.value }
+                                            setFormState((prev) => ({ ...prev, items: newItems }))
+                                          }}
+                                          className="h-10 text-sm"
+                                          placeholder="Item name"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          Price
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={item.price}
+                                          onChange={(event) => {
+                                            const newItems = [...formState.items]
+                                            newItems[index] = { ...item, price: Number(event.target.value) || 0 }
+                                            setFormState((prev) => ({ ...prev, items: newItems }))
+                                          }}
+                                          className="h-10 text-sm"
+                                          placeholder="0.00"
+                                        />
+                                      </div>
+                                    </div>
+                                    {item.brand && (
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          Brand
+                                        </Label>
+                                        <Input
+                                          value={item.brand}
+                                          onChange={(event) => {
+                                            const newItems = [...formState.items]
+                                            newItems[index] = { ...item, brand: event.target.value || null }
+                                            setFormState((prev) => ({ ...prev, items: newItems }))
+                                          }}
+                                          className="h-10 text-sm"
+                                          placeholder="Brand name"
+                                        />
+                                      </div>
+                                    )}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newItems = formState.items.filter((_, i) => i !== index)
+                                        setFormState((prev) => ({ ...prev, items: newItems }))
+                                      }}
+                                      className="w-full text-destructive hover:text-destructive"
+                                    >
+                                      <X className="mr-2 h-4 w-4" />
+                                      Remove Item
+                                    </Button>
+                                  </div>
+                                ))}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newItems = formState.items.concat({
+                                      name: "",
+                                      brand: null,
+                                      price: 0,
+                                    })
+                                    setFormState((prev) => ({ ...prev, items: newItems }))
+                                  }}
+                                  className="w-full"
+                                >
+                                  Add Item
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No items found in the receipt.</p>
+                            )}
                           </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Corrected Value
-                          </p>
-                          <Input
-                            id={`corrected-${field.key}`}
-                            type={field.type}
-                            step={field.step}
-                            value={formState[field.key]}
-                            onChange={(event) =>
-                              setFormState((prev) => ({
-                                ...prev,
-                                [field.key]: event.target.value,
-                              }))
-                            }
-                            className="h-12 text-sm"
-                          />
+                      )}
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor={`corrected-${field.key}`} className="text-sm font-semibold">
+                            {field.label}
+                          </Label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleApplyParsedValue(field.key)}
+                            disabled={!parsedValue}
+                            className="h-8 gap-1.5"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Use Parsed
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              OCR Extracted
+                            </p>
+                            <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/50 p-4">
+                              <p className="text-sm font-medium leading-relaxed">{displayValue}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Corrected Value
+                            </p>
+                            <Input
+                              id={`corrected-${field.key}`}
+                              type={field.type}
+                              step={field.step}
+                              value={formState[field.key]}
+                              onChange={(event) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  [field.key]: event.target.value,
+                                }))
+                              }
+                              className="h-12 text-sm"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>

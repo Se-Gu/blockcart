@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+
+type ReceiptItem = {
+  name: string;
+  brand?: string | null;
+  price: number;
+};
+
 type ReviewedFieldsPayload = {
   store?: string | null;
   location?: string | null;
@@ -8,6 +15,7 @@ type ReviewedFieldsPayload = {
   receipt_time?: string | null;
   payment_method?: string | null;
   total?: number | null;
+  items?: ReceiptItem[] | null;
 };
 
 const corsHeaders = {
@@ -55,11 +63,11 @@ function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
     }
     if (typeof raw === "string") {
       const trimmed = raw.trim();
-      sanitized[key] = trimmed.length > 0 ? trimmed : null;
+      (sanitized as Record<string, string | null>)[key] = trimmed.length > 0 ? trimmed : null;
       continue;
     }
     if (typeof raw === "number" || typeof raw === "boolean") {
-      sanitized[key] = String(raw);
+      (sanitized as Record<string, string | null>)[key] = String(raw);
     }
   }
 
@@ -83,6 +91,28 @@ function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
             : null;
         }
       }
+    }
+  }
+
+  // Handle items array
+  if ("items" in source) {
+    const rawItems = source.items;
+    if (rawItems === null) {
+      sanitized.items = null;
+    } else if (Array.isArray(rawItems)) {
+      const validItems: ReceiptItem[] = rawItems.filter((item): item is ReceiptItem => 
+        typeof item === "object" &&
+        item !== null &&
+        "name" in item &&
+        typeof item.name === "string" &&
+        item.name.trim().length > 0 &&
+        "price" in item &&
+        typeof item.price === "number" &&
+        Number.isFinite(item.price)
+      );
+      sanitized.items = validItems.length > 0 ? validItems : null;
+    } else {
+      sanitized.items = null;
     }
   }
 
@@ -232,9 +262,14 @@ serve(async (req) => {
         for (const key of trackedKeys) {
           const nextValue = sanitizedFields[key];
           if (nextValue !== undefined) {
-            previousFields[key] =
-              (existingReceiptRecord[key] as string | number | null | undefined) ??
-              null;
+            const rawValue = existingReceiptRecord[key];
+            if (key === "total") {
+              (previousFields as Record<string, number | null>)[key] = 
+                (typeof rawValue === "number") ? rawValue : null;
+            } else {
+              (previousFields as Record<string, string | null>)[key] = 
+                (typeof rawValue === "string") ? rawValue : null;
+            }
           }
         }
 
@@ -247,9 +282,12 @@ serve(async (req) => {
     if (hasReviewedFields) {
       receiptUpdate.reviewed_fields = sanitizedFields ?? null;
 
+      // Only update top-level columns for fields that have matching database columns
+      // Items should NOT be written to a top-level column (it doesn't exist)
       if (sanitizedFields) {
+        const topLevelFields = ["store", "location", "receipt_date", "receipt_time", "payment_method", "total"];
         for (const [key, value] of Object.entries(sanitizedFields)) {
-          if (value !== undefined) {
+          if (value !== undefined && topLevelFields.includes(key)) {
             receiptUpdate[key] = value;
           }
         }
