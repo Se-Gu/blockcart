@@ -51,20 +51,6 @@ CREATE TABLE public.receipt_assignments (
   CONSTRAINT receipt_assignments_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id),
   CONSTRAINT receipt_assignments_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id)
 );
-CREATE TABLE public.reviewer_notifications (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  reviewer_id uuid NOT NULL,
-  receipt_id uuid NOT NULL,
-  assignment_id uuid NOT NULL,
-  metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
-  created_at timestamp with time zone DEFAULT now() NOT NULL,
-  read_at timestamp with time zone,
-  CONSTRAINT reviewer_notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT reviewer_notifications_assignment_unique UNIQUE (assignment_id),
-  CONSTRAINT reviewer_notifications_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.receipt_assignments(id) ON DELETE CASCADE,
-  CONSTRAINT reviewer_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id) ON DELETE CASCADE,
-  CONSTRAINT reviewer_notifications_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id) ON DELETE CASCADE
-);
 CREATE TABLE public.receipt_reviews (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   receipt_id uuid NOT NULL,
@@ -106,21 +92,6 @@ CREATE TABLE public.receipts (
   CONSTRAINT receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT receipts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.web_users(id)
 );
-CREATE TABLE public.review_notifications (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  receipt_id uuid NOT NULL,
-  status text DEFAULT 'unread'::text CHECK (status = ANY (ARRAY['unread'::text, 'read'::text])),
-  title text NOT NULL,
-  message text NOT NULL,
-  metadata jsonb,
-  created_at timestamp with time zone DEFAULT now(),
-  read_at timestamp with time zone,
-  CONSTRAINT review_notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT review_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT review_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id)
-);
-CREATE INDEX review_notifications_user_id_status_idx ON public.review_notifications USING btree (user_id, status, created_at DESC);
 CREATE TABLE public.referrals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   referrer uuid,
@@ -132,6 +103,19 @@ CREATE TABLE public.referrals (
   CONSTRAINT referrals_pkey PRIMARY KEY (id),
   CONSTRAINT referrals_referrer_fkey FOREIGN KEY (referrer) REFERENCES public.users(id),
   CONSTRAINT referrals_referee_fkey FOREIGN KEY (referee) REFERENCES public.users(id)
+);
+CREATE TABLE public.reviewer_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  reviewer_id uuid NOT NULL,
+  receipt_id uuid NOT NULL,
+  assignment_id uuid NOT NULL UNIQUE,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  read_at timestamp with time zone,
+  CONSTRAINT reviewer_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT reviewer_notifications_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id),
+  CONSTRAINT reviewer_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id),
+  CONSTRAINT reviewer_notifications_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.receipt_assignments(id)
 );
 CREATE TABLE public.rewards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
