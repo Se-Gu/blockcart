@@ -271,25 +271,31 @@ serve(async (req) => {
         );
 
         if (!rewardResponse.ok) {
-          const rewardErrorBody = await rewardResponse.text();
-          console.error(
-            `[review-handler] Reward handler returned ${rewardResponse.status} for receipt ${receipt_id}`,
-            rewardErrorBody,
-          );
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error:
-                "Failed to create reward for approved receipt. Please try again or contact support.",
-            }),
-            {
-              status: 502,
-              headers: {
-                ...corsHeaders,
-                "Content-Type": "application/json",
+          if (rewardResponse.status === 409) {
+            console.warn(
+              `[review-handler] Reward handler reported existing reward for receipt ${receipt_id}. Treating as success.`,
+            );
+          } else {
+            const rewardErrorBody = await rewardResponse.text();
+            console.error(
+              `[review-handler] Reward handler returned ${rewardResponse.status} for receipt ${receipt_id}`,
+              rewardErrorBody,
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error:
+                  "Failed to create reward for approved receipt. Please try again or contact support.",
+              }),
+              {
+                status: 502,
+                headers: {
+                  ...corsHeaders,
+                  "Content-Type": "application/json",
+                },
               },
-            },
-          );
+            );
+          }
         }
       } catch (error) {
         console.error(
