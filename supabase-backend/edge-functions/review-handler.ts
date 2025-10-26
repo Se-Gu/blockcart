@@ -202,6 +202,9 @@ serve(async (req) => {
             headers: {
               ...corsHeaders,
               "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get(
+                "SUPABASE_SERVICE_ROLE_KEY",
+              )}`,
             },
             body: JSON.stringify({
               receipt_id,
@@ -211,14 +214,44 @@ serve(async (req) => {
         );
 
         if (!rewardResponse.ok) {
+          const rewardErrorBody = await rewardResponse.text();
           console.error(
             `[review-handler] Reward handler returned ${rewardResponse.status} for receipt ${receipt_id}`,
+            rewardErrorBody,
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error:
+                "Failed to create reward for approved receipt. Please try again or contact support.",
+            }),
+            {
+              status: 502,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+              },
+            },
           );
         }
       } catch (error) {
         console.error(
           `[review-handler] Failed to invoke reward handler for receipt ${receipt_id}`,
           error,
+        );
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              "Failed to create reward for approved receipt. Please try again or contact support.",
+          }),
+          {
+            status: 502,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          },
         );
       }
     }
