@@ -20,6 +20,8 @@ import type {
   ReceiptStatus,
   ReceiptReview,
 } from "@/lib/types"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { getSignedReceiptUrl } from "@/lib/storage"
 
 interface ReceiptDetailDialogProps {
   receipt: Receipt | null
@@ -211,6 +213,8 @@ export function ReceiptDetailDialog({
   reviewsLoading = false,
   reviewsError = null,
 }: ReceiptDetailDialogProps) {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+  const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null)
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [comment, setComment] = useState("")
   const [activeAction, setActiveAction] = useState<"approve" | "reject" | null>(null)
@@ -283,6 +287,33 @@ export function ReceiptDetailDialog({
     setComment(receipt.rejection_reason ?? "")
   }, [receipt])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const resolveImageUrl = async () => {
+      if (!receipt?.image_url) {
+        if (isMounted) {
+          setResolvedImageUrl(null)
+        }
+        return
+      }
+
+      const signedUrl = await getSignedReceiptUrl(supabase, receipt.image_url)
+
+      if (!isMounted) {
+        return
+      }
+
+      setResolvedImageUrl(signedUrl ?? receipt.image_url)
+    }
+
+    resolveImageUrl()
+
+    return () => {
+      isMounted = false
+    }
+  }, [receipt?.image_url, supabase])
+
   const mergedActionLoading = actionLoading || activeAction !== null
   const mergedOcrLoading = reRunLoading || localOcrLoading
   const approveButtonBusy = activeAction === "approve"
@@ -347,7 +378,11 @@ export function ReceiptDetailDialog({
           <div className="space-y-4">
             <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border border-border bg-muted">
               <Image
-                src={receipt.image_url || "/placeholder.svg?height=600&width=450&query=receipt"}
+                src={
+                  resolvedImageUrl ??
+                  receipt.image_url ??
+                  "/placeholder.svg?height=600&width=450&query=receipt"
+                }
                 alt="Receipt"
                 fill
                 className="object-contain"
