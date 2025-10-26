@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { X, Check, RefreshCw, Loader2 } from "lucide-react"
 import {
@@ -48,6 +48,22 @@ interface FormState {
   payment_method: string
   total: string
 }
+
+type ParsedValues = Record<keyof FormState, string>
+
+const reviewFieldConfigs: Array<{
+  key: keyof FormState
+  label: string
+  type?: string
+  step?: string
+}> = [
+  { key: "store", label: "Store" },
+  { key: "location", label: "Location" },
+  { key: "receipt_date", label: "Purchase Date", type: "date" },
+  { key: "receipt_time", label: "Purchase Time", type: "time" },
+  { key: "payment_method", label: "Payment Method" },
+  { key: "total", label: "Total Amount", type: "number", step: "0.01" },
+]
 
 const statusStyles: Record<ReceiptStatus, string> = {
   pending: "bg-yellow-500/10 text-yellow-600",
@@ -137,6 +153,24 @@ function buildReviewedFields(form: FormState): ReviewedFieldUpdates {
   }
 }
 
+function formatParsedComparisonValue(field: keyof FormState, value: string) {
+  if (!value) return "—"
+
+  if (field === "total") {
+    const numeric = Number(value)
+    if (!Number.isNaN(numeric)) {
+      return `$${numeric.toFixed(2)}`
+    }
+    return value
+  }
+
+  if (field === "receipt_date") {
+    return formatLongDate(value)
+  }
+
+  return value
+}
+
 function getStringField(
   source: Record<string, unknown> | null | undefined,
   key: string,
@@ -182,6 +216,38 @@ export function ReceiptDetailDialog({
   const [activeAction, setActiveAction] = useState<"approve" | "reject" | null>(null)
   const [localOcrLoading, setLocalOcrLoading] = useState(false)
 
+  const parsedValues = useMemo<ParsedValues>(() => {
+    if (!receipt) {
+      return { ...emptyForm }
+    }
+
+    const extractedFields = receipt.extracted_fields as
+      | Record<string, unknown>
+      | null
+      | undefined
+
+    return {
+      store: getStringField(extractedFields, "store", receipt.store_name),
+      location: getStringField(extractedFields, "location", receipt.location),
+      receipt_date: getStringField(
+        extractedFields,
+        "receipt_date",
+        receipt.purchase_date,
+      ),
+      receipt_time: getStringField(
+        extractedFields,
+        "receipt_time",
+        receipt.receipt_time,
+      ),
+      payment_method: getStringField(
+        extractedFields,
+        "payment_method",
+        receipt.payment_method,
+      ),
+      total: getNumericField(extractedFields, "total", receipt.total_amount),
+    }
+  }, [receipt])
+
   useEffect(() => {
     if (!receipt) {
       setFormState(emptyForm)
@@ -223,6 +289,11 @@ export function ReceiptDetailDialog({
   const rejectButtonBusy = activeAction === "reject"
   const assignmentLocked =
     !!receipt?.assignment_status && receipt.assignment_status !== "assigned"
+
+  const handleApplyParsedValue = (field: keyof FormState) => {
+    const parsedValue = parsedValues[field]
+    setFormState((prev) => ({ ...prev, [field]: parsedValue || "" }))
+  }
 
   const handleApprove = async () => {
     if (!receipt || assignmentLocked) return
@@ -371,72 +442,60 @@ export function ReceiptDetailDialog({
             </div>
 
             <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="text-sm font-semibold">Corrected Fields</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="corrected-store">Store</Label>
-                  <Input
-                    id="corrected-store"
-                    value={formState.store}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, store: event.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="corrected-location">Location</Label>
-                  <Input
-                    id="corrected-location"
-                    value={formState.location}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, location: event.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="corrected-date">Purchase Date</Label>
-                  <Input
-                    id="corrected-date"
-                    type="date"
-                    value={formState.receipt_date}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, receipt_date: event.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="corrected-time">Purchase Time</Label>
-                  <Input
-                    id="corrected-time"
-                    type="time"
-                    value={formState.receipt_time}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, receipt_time: event.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="corrected-payment">Payment Method</Label>
-                  <Input
-                    id="corrected-payment"
-                    value={formState.payment_method}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, payment_method: event.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="corrected-total">Total Amount</Label>
-                  <Input
-                    id="corrected-total"
-                    type="number"
-                    step="0.01"
-                    value={formState.total}
-                    onChange={(event) =>
-                      setFormState((prev) => ({ ...prev, total: event.target.value }))
-                    }
-                  />
-                </div>
+              <h3 className="text-sm font-semibold">Review Parsed Fields</h3>
+              <p className="text-xs text-muted-foreground">
+                Compare the parsed values against your corrections and copy them with
+                a single click.
+              </p>
+              <div className="space-y-4">
+                {reviewFieldConfigs.map((field) => {
+                  const parsedValue = parsedValues[field.key]
+                  const displayValue = formatParsedComparisonValue(
+                    field.key,
+                    parsedValue,
+                  )
+
+                  return (
+                    <div key={field.key} className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor={`corrected-${field.key}`}>
+                          {field.label}
+                        </Label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleApplyParsedValue(field.key)}
+                          disabled={!parsedValue}
+                        >
+                          Use parsed
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 p-3 text-sm">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Parsed
+                          </p>
+                          <p className="mt-1 break-words font-medium text-foreground">
+                            {displayValue}
+                          </p>
+                        </div>
+                        <Input
+                          id={`corrected-${field.key}`}
+                          type={field.type}
+                          step={field.step}
+                          value={formState[field.key]}
+                          onChange={(event) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
