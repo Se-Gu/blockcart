@@ -82,7 +82,7 @@ interface SupabaseReceiptAssignmentRow {
   released_at?: string | null;
   reviewer_id: string;
   reviewer?: SupabaseWebUserRow | null;
-  receipt: SupabaseReceiptRow;
+  receipt: SupabaseReceiptRow | null;
 }
 
 interface ReviewActionPayload {
@@ -106,6 +106,10 @@ const statusStyles: Record<ReceiptStatus, string> = {
 
 function transformReceiptRow(row: SupabaseReceiptAssignmentRow): Receipt {
   const receipt = row.receipt;
+
+  if (!receipt) {
+    throw new Error("Missing receipt data for assignment");
+  }
 
   const totalNumber =
     typeof receipt.total === "number"
@@ -349,9 +353,26 @@ export default function ReceiptsPage() {
 
       if (error) throw error;
 
-      const mapped = (data ?? []).map((row) =>
-        transformReceiptRow(row as unknown as SupabaseReceiptAssignmentRow)
+      const rows = (data ?? []) as SupabaseReceiptAssignmentRow[];
+
+      const validRows = rows.filter(
+        (
+          row
+        ): row is SupabaseReceiptAssignmentRow & { receipt: SupabaseReceiptRow } => {
+          const hasReceipt = Boolean(row.receipt);
+
+          if (!hasReceipt) {
+            console.warn(
+              "Skipping receipt assignment with missing receipt data",
+              row.id
+            );
+          }
+
+          return hasReceipt;
+        }
       );
+
+      const mapped = validRows.map((row) => transformReceiptRow(row));
 
       setReceipts(mapped);
       setTotalCount(count ?? 0);
