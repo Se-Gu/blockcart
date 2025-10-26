@@ -271,7 +271,13 @@ export default function ReceiptsPage() {
           )`,
           { count: "exact" },
         )
-        .in("status", assignmentStatuses)
+
+      // Only filter by assignment status if not showing all
+      if (statusFilter !== "all") {
+        query = query.in("status", assignmentStatuses)
+      }
+
+      query = query
         .is("released_at", null)
         .order("created_at", { referencedTable: "receipts", ascending: false })
         .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
