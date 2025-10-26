@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const { user_id, image_url } = await req.json();
+  const { user_id, image_url, storage_path, bucket } = await req.json();
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL"),
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -20,12 +20,63 @@ serve(async (req) => {
   try {
     console.log("📥 Incoming upload:", { user_id, image_url });
 
+    if (!bucket || !storage_path) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Missing storage location for receipt image.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const storage = supabase.storage.from(bucket);
+
     // Metadata
-    const headRes = await fetch(image_url, { method: "HEAD" });
-    const takenDate = headRes.headers.get("Last-Modified") || null;
+    let takenDate: string | null = null;
+    try {
+      const pathParts = storage_path.split("/");
+      const fileName = pathParts.pop();
+      const folderPath = pathParts.join("/");
+      if (fileName) {
+        const { data: metadataList, error: metadataError } = await storage.list(
+          folderPath || undefined,
+          {
+            limit: 1,
+            search: fileName,
+          }
+        );
+        if (!metadataError && metadataList && metadataList.length > 0) {
+          takenDate = metadataList[0]?.updated_at ?? null;
+        }
+      }
+    } catch (metadataErr) {
+      console.warn("⚠️ Unable to retrieve metadata for receipt:", metadataErr);
+    }
 
     // Duplicate detection
-    const buffer = await fetch(image_url).then((r) => r.arrayBuffer());
+    const { data: downloadData, error: downloadError } = await storage.download(
+      storage_path
+    );
+
+    if (downloadError || !downloadData) {
+      console.error("❌ Failed to download receipt from storage:", downloadError);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: "Unable to access uploaded receipt image for verification.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const buffer = await downloadData.arrayBuffer();
     const hashArray = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer)));
     const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
