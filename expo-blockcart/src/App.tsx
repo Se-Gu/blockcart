@@ -32,7 +32,7 @@ import { AuthContext } from "./context/AuthContext";
 import { NotificationsProvider } from "./context/NotificationsContext";
 import LoadingView from "./components/LoadingView";
 import { ToastProvider } from "./components/ToastProvider";
-import type { Receipt } from "./types";
+import type { Receipt, ReviewNotification } from "./types";
 import { colors } from "./theme/colors";
 
 Notifications.setNotificationHandler({
@@ -159,7 +159,7 @@ export default function App() {
       return;
     }
 
-    const channel = supabase
+    const receiptsChannel = supabase
       .channel(`receipts-updates-${session.user.id}`)
       .on(
         "postgres_changes",
@@ -193,8 +193,36 @@ export default function App() {
       )
       .subscribe();
 
+    const reviewNotificationsChannel = supabase
+      .channel(`review-notifications-alerts-${session.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "review_notifications",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        async (payload: RealtimePostgresChangesPayload<ReviewNotification>) => {
+          const notification = payload.new as ReviewNotification | null;
+          if (!notification) {
+            return;
+          }
+
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: notification.title || "Receipt update",
+              body: notification.message,
+            },
+            trigger: null,
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(receiptsChannel);
+      void supabase.removeChannel(reviewNotificationsChannel);
     };
   }, [session]);
 
