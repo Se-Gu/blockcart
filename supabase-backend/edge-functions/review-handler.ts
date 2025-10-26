@@ -128,8 +128,54 @@ serve(async (req) => {
       reviewed_by: reviewer_id,
       status: approved ? "approved" : "rejected",
       updated_at: now,
-      rejection_reason: approved ? null : trimmedComment || null,
+      rejection_reason: !approved && trimmedComment.length > 0 ? trimmedComment : null,
     };
+
+    let previousFields: ReviewedFieldsPayload | null = null;
+
+    if (sanitizedFields) {
+      const trackedKeys: Array<keyof ReviewedFieldsPayload> = [
+        "store",
+        "location",
+        "payment_method",
+        "receipt_date",
+        "receipt_time",
+        "total",
+      ];
+
+      const { data: existingReceipt, error: receiptFetchError } = await supabase
+        .from("receipts")
+        .select(trackedKeys.join(", "))
+        .eq("id", receipt_id)
+        .maybeSingle();
+
+      if (receiptFetchError) {
+        console.error(
+          `[review-handler] Failed to fetch current receipt values for ${receipt_id}`,
+          receiptFetchError,
+        );
+        throw new Error("Unable to fetch current receipt details");
+      }
+
+      if (existingReceipt) {
+        previousFields = {};
+        const existingReceiptRecord =
+          existingReceipt as Record<string, unknown>;
+
+        for (const key of trackedKeys) {
+          const nextValue = sanitizedFields[key];
+          if (nextValue !== undefined) {
+            previousFields[key] =
+              (existingReceiptRecord[key] as string | number | null | undefined) ??
+              null;
+          }
+        }
+
+        if (Object.keys(previousFields).length === 0) {
+          previousFields = null;
+        }
+      }
+    }
 
     if (hasReviewedFields) {
       receiptUpdate.reviewed_fields = sanitizedFields ?? null;
@@ -173,13 +219,17 @@ serve(async (req) => {
       );
     }
 
-    const reviewRecord = {
+    const reviewRecord: Record<string, unknown> = {
       receipt_id,
       reviewer_id,
       action: approved ? "approve" : "reject",
       new_fields: hasReviewedFields ? sanitizedFields ?? null : null,
       comment: trimmedComment || null,
     };
+
+    if (previousFields) {
+      reviewRecord.previous_fields = previousFields;
+    }
 
     const { error: reviewInsertError } = await supabase
       .from("receipt_reviews")
