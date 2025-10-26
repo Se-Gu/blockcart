@@ -106,6 +106,21 @@ CREATE TABLE public.receipts (
   CONSTRAINT receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT receipts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.web_users(id)
 );
+CREATE TABLE public.review_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  receipt_id uuid NOT NULL,
+  status text DEFAULT 'unread'::text CHECK (status = ANY (ARRAY['unread'::text, 'read'::text])),
+  title text NOT NULL,
+  message text NOT NULL,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  read_at timestamp with time zone,
+  CONSTRAINT review_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT review_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT review_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id)
+);
+CREATE INDEX review_notifications_user_id_status_idx ON public.review_notifications USING btree (user_id, status, created_at DESC);
 CREATE TABLE public.referrals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   referrer uuid,

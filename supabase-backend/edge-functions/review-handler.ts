@@ -16,6 +16,19 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+function normalizeNumeric(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
 function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
   if (!input || typeof input !== "object") {
     return null;
@@ -76,6 +89,52 @@ function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
   return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
+type EmailPayload = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+async function sendReviewOutcomeEmail({
+  to,
+  subject,
+  text,
+  html,
+}: EmailPayload) {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL");
+
+  if (!resendApiKey || !resendFromEmail) {
+    console.warn(
+      "[review-handler] RESEND_API_KEY or RESEND_FROM_EMAIL not configured. Skipping email notification.",
+    );
+    return;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: resendFromEmail,
+      to,
+      subject,
+      text,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(
+      `Failed to send review outcome email (status ${response.status}): ${responseBody}`,
+    );
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -130,6 +189,7 @@ serve(async (req) => {
       : null;
     const now = new Date().toISOString();
     const trimmedComment = typeof comment === "string" ? comment.trim() : "";
+    let rewardAmount: number | null = null;
 
     const receiptUpdate: Record<string, unknown> = {
       reviewed_by: reviewer_id,
@@ -296,6 +356,21 @@ serve(async (req) => {
               },
             );
           }
+        } else {
+          try {
+            const rewardPayload = await rewardResponse.json();
+            const extractedAmount =
+              rewardPayload?.amount ?? rewardPayload?.reward?.amount ?? null;
+            const parsedAmount = normalizeNumeric(extractedAmount);
+            if (parsedAmount !== null) {
+              rewardAmount = parsedAmount;
+            }
+          } catch (parseError) {
+            console.warn(
+              `[review-handler] Unable to parse reward handler response for receipt ${receipt_id}`,
+              parseError,
+            );
+          }
         }
       } catch (error) {
         console.error(
@@ -316,6 +391,141 @@ serve(async (req) => {
             },
           },
         );
+      }
+    }
+
+    if (user_id) {
+      const {
+        data: receiptDetails,
+        error: receiptDetailsError,
+      } = await supabase
+        .from("receipts")
+        .select(
+          "id, store, total, reward_amount, rejection_reason, users:user_id(email)",
+        )
+        .eq("id", receipt_id)
+        .maybeSingle();
+
+      if (receiptDetailsError) {
+        console.error(
+          `[review-handler] Failed to fetch receipt details for notifications ${receipt_id}`,
+          receiptDetailsError,
+        );
+        throw new Error("Unable to retrieve receipt information for notifications");
+      }
+
+      const receiptRecord = receiptDetails as
+        | (Record<string, unknown> & {
+            users?: { email?: string | null } | null;
+          })
+        | null;
+
+      const receiptStoreRaw =
+        typeof receiptRecord?.store === "string" ? receiptRecord.store : null;
+      const receiptStore =
+        receiptStoreRaw && receiptStoreRaw.trim().length > 0
+          ? receiptStoreRaw.trim()
+          : "your recent receipt";
+      const storedRewardAmount = normalizeNumeric(
+        receiptRecord?.reward_amount,
+      );
+      const finalRewardAmount =
+        rewardAmount ?? storedRewardAmount ?? normalizeNumeric(receiptUpdate.reward_amount);
+      const receiptTotal = normalizeNumeric(receiptRecord?.total);
+      const rejectionDetail =
+        trimmedComment.length > 0
+          ? trimmedComment
+          : typeof receiptRecord?.rejection_reason === "string"
+            ? receiptRecord.rejection_reason
+            : null;
+
+      const notificationTitle = approved
+        ? "Receipt approved 🎉"
+        : "Receipt review update";
+
+      const notificationMessage = approved
+        ? `Your receipt from ${receiptStore} was approved${
+            finalRewardAmount ? ` and earned ${finalRewardAmount.toFixed(2)} BTC$` : ""
+          }.`
+        : `Your receipt from ${receiptStore} was not approved${
+            rejectionDetail ? `: ${rejectionDetail}` : "."
+          }`;
+
+      const notificationPayload: Record<string, unknown> = {
+        user_id,
+        receipt_id,
+        status: "unread",
+        title: notificationTitle,
+        message: notificationMessage,
+        metadata: {
+          approved,
+          store: receiptStore,
+          reward_amount: finalRewardAmount,
+          receipt_total: receiptTotal,
+          rejection_reason: rejectionDetail,
+        },
+      };
+
+      const { error: notificationError } = await supabase
+        .from("review_notifications")
+        .insert(notificationPayload);
+
+      if (notificationError) {
+        console.error(
+          `[review-handler] Failed to persist notification for receipt ${receipt_id}`,
+          notificationError,
+        );
+        throw new Error("Unable to create review notification");
+      }
+
+      const userEmailRaw = receiptRecord?.users?.email;
+      const userEmail =
+        typeof userEmailRaw === "string" && userEmailRaw.includes("@")
+          ? userEmailRaw
+          : null;
+
+      if (userEmail) {
+        const subject = approved
+          ? "Your receipt was approved"
+          : "Update on your receipt review";
+        const greeting = `Hi there,`;
+        const bodyLines = approved
+          ? [
+              `Good news! Your receipt from ${receiptStore} was approved.`,
+              finalRewardAmount
+                ? `You've earned ${finalRewardAmount.toFixed(2)} BTC$ as a reward.`
+                : "Thanks for helping keep the Blockcart community running!",
+              "Rewards will appear in your wallet shortly.",
+            ]
+          : [
+              `We reviewed your receipt from ${receiptStore}, but it couldn't be approved.`,
+              rejectionDetail
+                ? `Reason: ${rejectionDetail}`
+                : "Unfortunately we couldn't verify the details provided.",
+              "You can try submitting a clearer photo if you'd like us to take another look.",
+            ];
+        const closing = "— The Blockcart Team";
+
+        const textContent = [greeting, "", ...bodyLines, "", closing].join("\n");
+        const htmlContent = `
+          <p>${greeting}</p>
+          ${bodyLines.map((line) => `<p>${line}</p>`).join("")}
+          <p>${closing}</p>
+        `;
+
+        try {
+          await sendReviewOutcomeEmail({
+            to: userEmail,
+            subject,
+            text: textContent,
+            html: htmlContent,
+          });
+        } catch (emailError) {
+          console.error(
+            `[review-handler] Failed to send review outcome email for receipt ${receipt_id}`,
+            emailError,
+          );
+        }
       }
     }
 
