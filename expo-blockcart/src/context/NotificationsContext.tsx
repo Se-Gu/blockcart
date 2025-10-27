@@ -49,7 +49,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("review_notifications")
+        .from("reviewer_notifications")
         .select(selectColumns)
         .eq("user_id", userId)
         .eq("status", "unread")
@@ -88,7 +88,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         {
           event: "INSERT",
           schema: "public",
-          table: "review_notifications",
+          table: "reviewer_notifications",
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
@@ -124,7 +124,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
 
       try {
         const { data, error } = await supabase
-          .from("review_notifications")
+          .from("reviewer_notifications")
           .update({
             status: "read",
             read_at: new Date().toISOString(),
@@ -168,7 +168,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
 
     try {
       await supabase
-        .from("review_notifications")
+        .from("reviewer_notifications")
         .update({
           status: "read",
           read_at: new Date().toISOString(),

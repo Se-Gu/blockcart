@@ -200,7 +200,7 @@ export default function App() {
         {
           event: "INSERT",
           schema: "public",
-          table: "review_notifications",
+          table: "reviewer_notifications",
           filter: `user_id=eq.${session.user.id}`,
         },
         async (payload: RealtimePostgresChangesPayload<ReviewNotification>) => {

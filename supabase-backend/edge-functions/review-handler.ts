@@ -505,7 +505,7 @@ serve(async (req) => {
         .eq("id", receipt_id)
         .maybeSingle();
 
-      if (receiptDetailsError) {
+      if (receireviewer_notifications
         console.error(
           `[review-handler] Failed to fetch receipt details for notifications ${receipt_id}`,
           receiptDetailsError,
