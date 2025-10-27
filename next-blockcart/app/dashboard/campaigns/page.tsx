@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Plus, Trash2, Loader2 } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,18 @@ import { CampaignFormDialog } from "@/components/campaign-form-dialog";
 import type { Campaign } from "@/lib/types";
 import { toast } from "sonner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  buildCampaignRulePayload,
+  cloneRuleFormState,
+  createDraftFromCampaign as createRuleDraft,
+  stableStringify,
+  CAMPAIGN_RULE_TEMPLATES,
+  applyTemplateToForm,
+  type CampaignRuleFormState,
+} from "@/lib/campaign-rules";
+import type { CampaignRuleTemplate } from "@/lib/campaign-rules";
+import { CampaignRuleBuilder } from "@/components/campaign-rule-builder";
+import { useCampaignRulePreview } from "@/hooks/use-campaign-rule-preview";
 
 type CampaignStatus = "active" | "inactive" | "completed";
 
@@ -35,7 +47,17 @@ type CampaignDraft = {
   multiplier: string;
   start_date: string;
   end_date: string;
-  ruleJsonText: string;
+  ruleForm: CampaignRuleFormState;
+  ruleExtras: Record<string, unknown>;
+};
+
+type CampaignEligibilitySnapshot = {
+  campaign_id: string;
+  eligible_receipts: number;
+  eligible_users: number;
+  total_receipts: number;
+  total_users: number;
+  calculated_at: string | null;
 };
 
 function computeCampaignStatus(campaign: Campaign): CampaignStatus {
@@ -70,18 +92,6 @@ function normalizeDateInput(value: string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
-function stringifyRuleJson(
-  rule: Record<string, unknown> | null | undefined
-): string {
-  if (!rule) return "";
-  try {
-    return JSON.stringify(rule, null, 2);
-  } catch (error) {
-    console.error("Failed to stringify rule_json", error);
-    return String(rule);
-  }
-}
-
 function sanitizeCampaign(entry: any): Campaign {
   return {
     id: String(entry.id),
@@ -98,14 +108,14 @@ function sanitizeCampaign(entry: any): Campaign {
 }
 
 function createDraftFromCampaign(campaign: Campaign): CampaignDraft {
+  const ruleDraft = createRuleDraft(campaign);
   return {
     brand: campaign.brand ?? "",
     multiplier: campaign.multiplier != null ? String(campaign.multiplier) : "1",
     start_date: normalizeDateInput(campaign.start_date),
     end_date: normalizeDateInput(campaign.end_date),
-    ruleJsonText: stringifyRuleJson(
-      campaign.rule_json as Record<string, unknown> | null
-    ),
+    ruleForm: cloneRuleFormState(ruleDraft.form),
+    ruleExtras: { ...ruleDraft.extras },
   };
 }
 
@@ -113,18 +123,18 @@ function hasDraftChanges(draft: CampaignDraft, campaign: Campaign) {
   const normalizedMultiplier = Number.isFinite(Number(draft.multiplier))
     ? Number(draft.multiplier)
     : campaign.multiplier;
-
-  const draftRuleText = draft.ruleJsonText.trim();
-  const campaignRuleText = stringifyRuleJson(
-    campaign.rule_json as Record<string, unknown> | null
-  ).trim();
+  const draftRulePayload = buildCampaignRulePayload(
+    draft.ruleForm,
+    draft.ruleExtras
+  );
+  const campaignRulePayload = campaign.rule_json ?? {};
 
   return (
     draft.brand.trim() !== campaign.brand ||
     normalizedMultiplier !== campaign.multiplier ||
     draft.start_date !== normalizeDateInput(campaign.start_date) ||
     draft.end_date !== normalizeDateInput(campaign.end_date) ||
-    draftRuleText !== campaignRuleText
+    stableStringify(draftRulePayload) !== stableStringify(campaignRulePayload)
   );
 }
 
@@ -145,6 +155,169 @@ function extractVersion(campaign: Campaign): number | null {
   return typeof ruleVersion === "number" ? ruleVersion : null;
 }
 
+interface CampaignRowProps {
+  campaign: CampaignWithStatus;
+  draft: CampaignDraft;
+  onDraftChange: (campaignId: string, field: keyof CampaignDraft, value: string) => void;
+  onRuleChange: (campaignId: string, form: CampaignRuleFormState) => void;
+  onTemplateApply: (campaignId: string, template: CampaignRuleTemplate) => void;
+  onAutoSave: (campaignId: string) => void;
+  onDelete: (campaignId: string) => void;
+  saving: boolean;
+  supabase: SupabaseClient;
+  storeOptions: string[];
+  templates: CampaignRuleTemplate[];
+  eligibility?: CampaignEligibilitySnapshot | null;
+}
+
+function CampaignRow({
+  campaign,
+  draft,
+  onDraftChange,
+  onRuleChange,
+  onTemplateApply,
+  onAutoSave,
+  onDelete,
+  saving,
+  supabase,
+  storeOptions,
+  templates,
+  eligibility,
+}: CampaignRowProps) {
+  const { preview, isLoading: previewLoading } = useCampaignRulePreview(
+    supabase,
+    draft.ruleForm,
+    draft.ruleExtras
+  );
+
+  const version = extractVersion(campaign);
+  const statusVariants: Record<CampaignStatus, string> = {
+    active: "bg-green-500/10 text-green-600 hover:bg-green-500/20",
+    inactive: "bg-gray-500/10 text-gray-600 hover:bg-gray-500/20",
+    completed: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20",
+  };
+
+  const statusBadge = campaign.status ? (
+    <Badge variant="secondary" className={statusVariants[campaign.status]}>
+      {campaign.status}
+    </Badge>
+  ) : null;
+
+  return (
+    <TableRow key={campaign.id} className="hover:bg-muted/50">
+      <TableCell className="align-top">
+        <div className="space-y-2">
+          <Input
+            value={draft.brand}
+            placeholder="Campaign brand"
+            onChange={(event) => onDraftChange(campaign.id, "brand", event.target.value)}
+            onBlur={() => onAutoSave(campaign.id)}
+          />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {version ? (
+              <Badge variant="secondary" className="bg-muted text-xs font-normal">
+                v{version}
+              </Badge>
+            ) : null}
+            <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+              {campaign.id.slice(0, 8)}…
+            </span>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="align-top">
+        <CampaignRuleBuilder
+          value={draft.ruleForm}
+          onChange={(next) => onRuleChange(campaign.id, next)}
+          onCommit={() => onAutoSave(campaign.id)}
+          storeOptions={storeOptions}
+          templates={templates}
+          onApplyTemplate={(template) => {
+            onTemplateApply(campaign.id, template);
+            onAutoSave(campaign.id);
+          }}
+          preview={preview}
+          previewLoading={previewLoading}
+          layout="inline"
+        />
+      </TableCell>
+      <TableCell className="align-top">
+        <div className="flex flex-col gap-2">
+          <Input
+            type="date"
+            value={draft.start_date}
+            onChange={(event) => onDraftChange(campaign.id, "start_date", event.target.value)}
+            onBlur={() => onAutoSave(campaign.id)}
+          />
+          <Input
+            type="date"
+            value={draft.end_date}
+            onChange={(event) => onDraftChange(campaign.id, "end_date", event.target.value)}
+            onBlur={() => onAutoSave(campaign.id)}
+          />
+        </div>
+      </TableCell>
+      <TableCell className="align-top">
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={draft.multiplier}
+          onChange={(event) => onDraftChange(campaign.id, "multiplier", event.target.value)}
+          onBlur={() => onAutoSave(campaign.id)}
+        />
+      </TableCell>
+      <TableCell className="align-top">
+        {eligibility ? (
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>
+              <span className="font-medium text-foreground">{eligibility.eligible_users}</span>
+              {" / "}
+              {eligibility.total_users}
+              {" users"}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">{eligibility.eligible_receipts}</span>
+              {" / "}
+              {eligibility.total_receipts}
+              {" receipts"}
+            </p>
+            {eligibility.calculated_at ? (
+              <p>as of {new Date(eligibility.calculated_at).toLocaleString()}</p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Snapshot unavailable</p>
+        )}
+      </TableCell>
+      <TableCell className="align-top">{statusBadge}</TableCell>
+      <TableCell className="align-top">
+        <div className="text-sm">
+          <p>{campaign.updated_at ? formatDate(campaign.updated_at) : "—"}</p>
+          {campaign.updated_at ? (
+            <p className="text-xs text-muted-foreground">
+              {new Date(campaign.updated_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          ) : null}
+          {saving ? (
+            <span className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+            </span>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell className="text-right align-top">
+        <Button variant="ghost" size="icon" onClick={() => onDelete(campaign.id)}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function CampaignsPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -160,6 +333,98 @@ export default function CampaignsPage() {
     "all"
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [storeOptions, setStoreOptions] = useState<string[]>([]);
+  const [eligibilitySnapshots, setEligibilitySnapshots] = useState<
+    Record<string, CampaignEligibilitySnapshot>
+  >({});
+  const templates = useMemo(() => CAMPAIGN_RULE_TEMPLATES, []);
+
+  const fetchEligibilitySnapshots = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("campaign_eligibility_snapshots")
+      .select(
+        "campaign_id, eligible_receipts, eligible_users, total_receipts, total_users, calculated_at"
+      );
+
+    if (error) {
+      console.error("Failed to fetch eligibility snapshots", error);
+      return;
+    }
+
+    const mapped = (data ?? []).reduce<Record<string, CampaignEligibilitySnapshot>>(
+      (acc, entry) => {
+        if (!entry?.campaign_id) return acc;
+        acc[entry.campaign_id] = {
+          campaign_id: entry.campaign_id,
+          eligible_receipts: Number(entry.eligible_receipts ?? 0),
+          eligible_users: Number(entry.eligible_users ?? 0),
+          total_receipts: Number(entry.total_receipts ?? 0),
+          total_users: Number(entry.total_users ?? 0),
+          calculated_at: entry.calculated_at ?? null,
+        };
+        return acc;
+      },
+      {}
+    );
+
+    setEligibilitySnapshots(mapped);
+  }, [supabase]);
+
+  const refreshEligibilityForCampaign = useCallback(
+    async (campaignId: string) => {
+      const { data, error } = await supabase
+        .from("campaign_eligibility_snapshots")
+        .select(
+          "campaign_id, eligible_receipts, eligible_users, total_receipts, total_users, calculated_at"
+        )
+        .eq("campaign_id", campaignId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Failed to refresh eligibility snapshot", error);
+        return;
+      }
+
+      if (!data) {
+        setEligibilitySnapshots((previous) => {
+          const { [campaignId]: _removed, ...rest } = previous;
+          return rest;
+        });
+        return;
+      }
+
+      setEligibilitySnapshots((previous) => ({
+        ...previous,
+        [campaignId]: {
+          campaign_id: data.campaign_id,
+          eligible_receipts: Number(data.eligible_receipts ?? 0),
+          eligible_users: Number(data.eligible_users ?? 0),
+          total_receipts: Number(data.total_receipts ?? 0),
+          total_users: Number(data.total_users ?? 0),
+          calculated_at: data.calculated_at ?? null,
+        },
+      }));
+    },
+    [supabase]
+  );
+
+  const fetchStoreOptions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("campaign_available_stores")
+      .select("store_name")
+      .order("store_name", { ascending: true });
+
+    if (error) {
+      console.error("Failed to load store options", error);
+      return;
+    }
+
+    const stores = (data ?? [])
+      .map((entry) => (entry?.store_name ? String(entry.store_name) : null))
+      .filter((value): value is string => Boolean(value));
+
+    setStoreOptions(stores);
+  }, [supabase]);
 
   const fetchCampaigns = useCallback(async () => {
     setIsLoading(true);
@@ -194,11 +459,16 @@ export default function CampaignsPage() {
     setCampaigns(sanitized);
     setDraftCampaigns(drafts);
     setIsLoading(false);
-  }, [supabase]);
+    await fetchEligibilitySnapshots();
+  }, [supabase, fetchEligibilitySnapshots]);
 
   useEffect(() => {
     fetchCampaigns();
   }, [fetchCampaigns]);
+
+  useEffect(() => {
+    fetchStoreOptions();
+  }, [fetchStoreOptions]);
 
   const handleSave = useCallback(
     async (campaignData: Partial<Campaign>) => {
@@ -264,9 +534,11 @@ export default function CampaignsPage() {
         [updatedCampaign.id]: false,
       }));
 
+      await refreshEligibilityForCampaign(updatedCampaign.id);
+
       toast.success(`Campaign ${campaignData.id ? "updated" : "created"}`);
     },
-    [fetchCampaigns, supabase]
+    [fetchCampaigns, refreshEligibilityForCampaign, supabase]
   );
 
   const handleDraftChange = useCallback(
@@ -282,6 +554,46 @@ export default function CampaignsPage() {
           [campaignId]: {
             ...currentDraft,
             [field]: value,
+          },
+        };
+      });
+    },
+    [campaigns]
+  );
+
+  const handleRuleDraftChange = useCallback(
+    (campaignId: string, nextForm: CampaignRuleFormState) => {
+      setDraftCampaigns((previous) => {
+        const campaign = campaigns.find((item) => item.id === campaignId);
+        const baseDraft =
+          previous[campaignId] ?? (campaign ? createDraftFromCampaign(campaign) : null);
+        if (!baseDraft) return previous;
+        return {
+          ...previous,
+          [campaignId]: {
+            ...baseDraft,
+            ruleForm: cloneRuleFormState(nextForm),
+          },
+        };
+      });
+    },
+    [campaigns]
+  );
+
+  const handleTemplateApply = useCallback(
+    (campaignId: string, template: CampaignRuleTemplate) => {
+      setDraftCampaigns((previous) => {
+        const campaign = campaigns.find((item) => item.id === campaignId);
+        const baseDraft =
+          previous[campaignId] ?? (campaign ? createDraftFromCampaign(campaign) : null);
+        if (!baseDraft) return previous;
+        const applied = applyTemplateToForm(template, baseDraft.ruleExtras);
+        return {
+          ...previous,
+          [campaignId]: {
+            ...baseDraft,
+            ruleForm: cloneRuleFormState(applied.form),
+            ruleExtras: { ...applied.extras },
           },
         };
       });
@@ -323,38 +635,10 @@ export default function CampaignsPage() {
         return;
       }
 
-      let parsedRuleJson: Record<string, unknown> | null = null;
-      const trimmedRule = draft.ruleJsonText.trim();
-
-      if (trimmedRule.length > 0) {
-        try {
-          const candidate = JSON.parse(trimmedRule);
-
-          if (
-            candidate === null ||
-            Array.isArray(candidate) ||
-            typeof candidate !== "object"
-          ) {
-            throw new Error("rule_json must be a JSON object");
-          }
-
-          parsedRuleJson = candidate as Record<string, unknown>;
-        } catch (error) {
-          toast.error("Invalid campaign rules", {
-            description: error instanceof Error ? error.message : String(error),
-          });
-          setDraftCampaigns((previous) => ({
-            ...previous,
-            [campaignId]: createDraftFromCampaign(campaign),
-          }));
-          return;
-        }
-      }
-
       const payload = {
         brand: draft.brand.trim(),
         multiplier: normalizedMultiplier,
-        rule_json: parsedRuleJson,
+        rule_json: buildCampaignRulePayload(draft.ruleForm, draft.ruleExtras),
         start_date: draft.start_date || null,
         end_date: draft.end_date || null,
       };
@@ -401,9 +685,25 @@ export default function CampaignsPage() {
         [campaignId]: createDraftFromCampaign(updatedCampaign),
       }));
 
+      await refreshEligibilityForCampaign(campaignId);
+
       toast.success("Campaign updated");
     },
-    [campaigns, draftCampaigns, fetchCampaigns, supabase]
+    [campaigns, draftCampaigns, fetchCampaigns, refreshEligibilityForCampaign, supabase]
+  );
+
+  const queueInlineSave = useCallback(
+    (campaignId: string) => {
+      if (typeof window === "undefined") {
+        void handleInlineBlur(campaignId);
+        return;
+      }
+
+      window.setTimeout(() => {
+        void handleInlineBlur(campaignId);
+      }, 0);
+    },
+    [handleInlineBlur]
   );
 
   const handleDelete = useCallback(
@@ -434,6 +734,10 @@ export default function CampaignsPage() {
         const { [campaignId]: _removed, ...rest } = previous;
         return rest;
       });
+      setEligibilitySnapshots((previous) => {
+        const { [campaignId]: _removedSnapshot, ...rest } = previous;
+        return rest;
+      });
     },
     [supabase]
   );
@@ -457,19 +761,6 @@ export default function CampaignsPage() {
 
       return matchesSearch && matchesStatus;
     });
-
-  const getStatusBadge = (status: CampaignStatus) => {
-    const variants: Record<CampaignStatus, string> = {
-      active: "bg-green-500/10 text-green-600 hover:bg-green-500/20",
-      inactive: "bg-gray-500/10 text-gray-600 hover:bg-gray-500/20",
-      completed: "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20",
-    };
-    return (
-      <Badge variant="secondary" className={variants[status]}>
-        {status}
-      </Badge>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -525,6 +816,7 @@ export default function CampaignsPage() {
               <TableHead>Rules</TableHead>
               <TableHead>Schedule</TableHead>
               <TableHead>Multiplier</TableHead>
+              <TableHead>Eligibility</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last Update</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -534,7 +826,7 @@ export default function CampaignsPage() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="text-center text-muted-foreground h-32"
                 >
                   Loading campaigns...
@@ -543,7 +835,7 @@ export default function CampaignsPage() {
             ) : filteredCampaigns.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="text-center text-muted-foreground h-32"
                 >
                   No campaigns found
@@ -555,138 +847,21 @@ export default function CampaignsPage() {
                   draftCampaigns[campaign.id] ??
                   createDraftFromCampaign(campaign);
                 return (
-                  <TableRow key={campaign.id} className="hover:bg-muted/50">
-                    <TableCell className="align-top">
-                      <div className="space-y-2">
-                        <Input
-                          value={draft.brand}
-                          placeholder="Campaign brand"
-                          onChange={(event) =>
-                            handleDraftChange(
-                              campaign.id,
-                              "brand",
-                              event.target.value
-                            )
-                          }
-                          onBlur={() => handleInlineBlur(campaign.id)}
-                        />
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {(() => {
-                            const version = extractVersion(campaign);
-                            return version ? (
-                              <Badge
-                                variant="secondary"
-                                className="bg-muted text-xs font-normal"
-                              >
-                                v{version}
-                              </Badge>
-                            ) : null;
-                          })()}
-                          <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                            {campaign.id.slice(0, 8)}…
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <Textarea
-                        value={draft.ruleJsonText}
-                        onChange={(event) =>
-                          handleDraftChange(
-                            campaign.id,
-                            "ruleJsonText",
-                            event.target.value
-                          )
-                        }
-                        onBlur={() => handleInlineBlur(campaign.id)}
-                        spellCheck={false}
-                        rows={6}
-                        className="font-mono text-xs"
-                        placeholder='{"version": 1}'
-                      />
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        Updates save automatically on blur.
-                      </p>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <div className="flex flex-col gap-2">
-                        <Input
-                          type="date"
-                          value={draft.start_date}
-                          onChange={(event) =>
-                            handleDraftChange(
-                              campaign.id,
-                              "start_date",
-                              event.target.value
-                            )
-                          }
-                          onBlur={() => handleInlineBlur(campaign.id)}
-                        />
-                        <Input
-                          type="date"
-                          value={draft.end_date}
-                          onChange={(event) =>
-                            handleDraftChange(
-                              campaign.id,
-                              "end_date",
-                              event.target.value
-                            )
-                          }
-                          onBlur={() => handleInlineBlur(campaign.id)}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={draft.multiplier}
-                        onChange={(event) =>
-                          handleDraftChange(
-                            campaign.id,
-                            "multiplier",
-                            event.target.value
-                          )
-                        }
-                        onBlur={() => handleInlineBlur(campaign.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="align-top">
-                      {getStatusBadge(campaign.status)}
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <div className="text-sm">
-                        <p>
-                          {campaign.updated_at
-                            ? formatDate(campaign.updated_at)
-                            : "—"}
-                        </p>
-                        {campaign.updated_at ? (
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(campaign.updated_at).toLocaleTimeString(
-                              [],
-                              { hour: "2-digit", minute: "2-digit" }
-                            )}
-                          </p>
-                        ) : null}
-                        {savingCampaigns[campaign.id] ? (
-                          <span className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin" /> Saving…
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right align-top">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(campaign.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                  <CampaignRow
+                    key={campaign.id}
+                    campaign={campaign}
+                    draft={draft}
+                    onDraftChange={handleDraftChange}
+                    onRuleChange={handleRuleDraftChange}
+                    onTemplateApply={handleTemplateApply}
+                    onAutoSave={queueInlineSave}
+                    onDelete={handleDelete}
+                    saving={Boolean(savingCampaigns[campaign.id])}
+                    supabase={supabase}
+                    storeOptions={storeOptions}
+                    templates={templates}
+                    eligibility={eligibilitySnapshots[campaign.id]}
+                  />
                 );
               })
             )}
@@ -700,6 +875,9 @@ export default function CampaignsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSave={handleSave}
+        storeOptions={storeOptions}
+        supabaseClient={supabase}
+        templates={templates}
       />
     </div>
   );

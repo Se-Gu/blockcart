@@ -12,6 +12,27 @@ A Next.js application for managing receipt submissions, user referrals, and rewa
 - Referral tracking
 - Analytics dashboard
 
+## Campaign templates & eligibility tooling
+
+Blockcart partnerships can now launch promotions without touching raw JSON. The
+dashboard surfaces curated templates that map directly to the structured
+`rule_json` schema:
+
+- **Double Rewards Weekend** – toggles the `multiplier_overrides.double_base`
+  flag while enforcing a `$25` `min_spend`.
+- **Grocery Basket Bonus** – uses the `fixed_bonus` reward type with
+  store-specific targeting via `eligible_stores` and a `$40` minimum receipt
+  total.
+- **Referral Boost** – enables the `referral_boost` reward type, requires a
+  referral relationship (`referral.required`) and enforces verified identities
+  through the demographic filters.
+
+While configuring a campaign you can select one of these templates, tweak
+individual fields through structured inputs (store pickers, demographic
+filters, and multiplier toggles), and view live eligibility counts powered by
+the Supabase `campaign_eligibility_snapshots` view and `preview_campaign_rule`
+RPC.
+
 ## Authentication
 
 ### Supabase Authentication Setup
