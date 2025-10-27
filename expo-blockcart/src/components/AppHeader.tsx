@@ -1,29 +1,20 @@
-"use client";
-import { useCallback, useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
-import {
-  Badge,
-  Button,
-  Dialog,
-  IconButton,
-  Menu,
-  Portal,
-  Text,
-  useTheme,
-} from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { spacing } from "../theme/colors";
-import { useAuth } from "../context/AuthContext";
-import { useNotifications } from "../context/NotificationsContext";
-import type { ReviewNotification } from "../types";
+"use client"
+import { useCallback, useMemo, useState } from "react"
+import { ScrollView, View } from "react-native"
+import { Badge, Button, Dialog, IconButton, Menu, Portal, Text, useTheme } from "react-native-paper"
+import { LinearGradient } from "expo-linear-gradient"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { colors, spacing, typography } from "../theme/colors"
+import { useAuth } from "../context/AuthContext"
+import { useNotifications } from "../context/NotificationsContext"
+import type { ReviewNotification } from "../types"
 
 interface AppHeaderProps {
-  title?: string;
-  canGoBack?: boolean;
-  onBackPress?: () => void;
-  onNavigateToProfile?: () => void;
-  onNavigateToReceipt?: (receiptId: string) => void;
+  title?: string
+  canGoBack?: boolean
+  onBackPress?: () => void
+  onNavigateToProfile?: () => void
+  onNavigateToReceipt?: (receiptId: string) => void
 }
 
 export default function AppHeader({
@@ -33,86 +24,79 @@ export default function AppHeader({
   onNavigateToProfile,
   onNavigateToReceipt,
 }: AppHeaderProps) {
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { signOut } = useAuth();
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [notificationDialogVisible, setNotificationDialogVisible] =
-    useState(false);
-  const {
-    notifications,
-    unreadCount,
-    loading,
-    dismissNotification,
-    dismissAll,
-    markNotificationAsRead,
-  } = useNotifications();
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const { signOut } = useAuth()
+  const [menuVisible, setMenuVisible] = useState(false)
+  const [notificationDialogVisible, setNotificationDialogVisible] = useState(false)
+  const { notifications, unreadCount, loading, dismissNotification, dismissAll, markNotificationAsRead } =
+    useNotifications()
 
-  const hasNotifications = unreadCount > 0;
+  const hasNotifications = unreadCount > 0
   const displayCount = useMemo(() => {
     if (unreadCount > 99) {
-      return "99+";
+      return "99+"
     }
 
     if (unreadCount > 9) {
-      return "9+";
+      return "9+"
     }
 
-    return String(unreadCount);
-  }, [unreadCount]);
+    return String(unreadCount)
+  }, [unreadCount])
 
   const closeMenu = useCallback(() => {
-    setMenuVisible(false);
-  }, []);
+    setMenuVisible(false)
+  }, [])
 
   const handleProfilePress = useCallback(() => {
-    closeMenu();
-    onNavigateToProfile?.();
-  }, [closeMenu, onNavigateToProfile]);
+    closeMenu()
+    onNavigateToProfile?.()
+  }, [closeMenu, onNavigateToProfile])
 
   const handleSignOut = useCallback(() => {
-    closeMenu();
-    void signOut();
-  }, [closeMenu, signOut]);
+    closeMenu()
+    void signOut()
+  }, [closeMenu, signOut])
 
   const openNotifications = useCallback(() => {
-    setNotificationDialogVisible(true);
-  }, []);
+    setNotificationDialogVisible(true)
+  }, [])
 
   const closeNotifications = useCallback(() => {
-    setNotificationDialogVisible(false);
-  }, []);
+    setNotificationDialogVisible(false)
+  }, [])
 
   const handleViewNotification = useCallback(
     async (notification: ReviewNotification) => {
-      const result = await markNotificationAsRead(notification.id);
-      closeNotifications();
+      const result = await markNotificationAsRead(notification.id)
+      closeNotifications()
       if (result?.receipt_id) {
-        onNavigateToReceipt?.(result.receipt_id);
+        onNavigateToReceipt?.(result.receipt_id)
       } else {
-        onNavigateToReceipt?.(notification.receipt_id);
+        onNavigateToReceipt?.(notification.receipt_id)
       }
     },
     [closeNotifications, markNotificationAsRead, onNavigateToReceipt],
-  );
+  )
 
   const handleDismissNotification = useCallback(
     async (notificationId: string) => {
-      await dismissNotification(notificationId);
+      await dismissNotification(notificationId)
     },
     [dismissNotification],
-  );
+  )
 
   const handleDismissAll = useCallback(async () => {
-    await dismissAll();
-    closeNotifications();
-  }, [closeNotifications, dismissAll]);
+    await dismissAll()
+    closeNotifications()
+  }, [closeNotifications, dismissAll])
 
   return (
     <LinearGradient
-      colors={[theme.colors.primary, theme.colors.secondary]}
+      colors={[colors.gradientStart, colors.gradientMid, colors.gradientEnd]}
       start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={{
         paddingTop: insets.top + spacing.md,
         paddingBottom: spacing.md,
@@ -127,12 +111,7 @@ export default function AppHeader({
         }}
       >
         {canGoBack ? (
-          <IconButton
-            icon="arrow-left"
-            iconColor="#FFFFFF"
-            size={24}
-            onPress={onBackPress}
-          />
+          <IconButton icon="arrow-left" iconColor="#FFFFFF" size={24} onPress={onBackPress} />
         ) : (
           <View style={{ width: 40 }} />
         )}
@@ -140,10 +119,10 @@ export default function AppHeader({
         <Text
           variant="headlineSmall"
           style={{
-            color: theme.colors.onPrimary,
-            fontWeight: "600",
+            color: "#FFFFFF",
+            fontWeight: typography.fontWeights.semibold,
             textAlign: "center",
-            letterSpacing: 0.5,
+            letterSpacing: typography.letterSpacing.wide,
             flexShrink: 1,
           }}
         >
@@ -165,8 +144,11 @@ export default function AppHeader({
                   position: "absolute",
                   top: spacing.xs,
                   right: spacing.xs,
-                  backgroundColor: theme.colors.error,
+                  backgroundColor: colors.error,
                   color: "#FFFFFF",
+                  fontWeight: typography.fontWeights.bold,
+                  minWidth: 20,
+                  height: 20,
                 }}
               >
                 {displayCount}
@@ -178,12 +160,7 @@ export default function AppHeader({
             visible={menuVisible}
             onDismiss={closeMenu}
             anchor={
-              <IconButton
-                icon="account-circle"
-                iconColor="#FFFFFF"
-                size={28}
-                onPress={() => setMenuVisible(true)}
-              />
+              <IconButton icon="account-circle" iconColor="#FFFFFF" size={28} onPress={() => setMenuVisible(true)} />
             }
             contentStyle={{ backgroundColor: theme.colors.surface }}
           >
@@ -194,10 +171,7 @@ export default function AppHeader({
       </View>
 
       <Portal>
-        <Dialog
-          visible={notificationDialogVisible}
-          onDismiss={closeNotifications}
-        >
+        <Dialog visible={notificationDialogVisible} onDismiss={closeNotifications}>
           <Dialog.Title>Notifications</Dialog.Title>
           <Dialog.ScrollArea>
             <ScrollView
@@ -208,10 +182,7 @@ export default function AppHeader({
               style={{ maxHeight: 320 }}
             >
               {notifications.length === 0 ? (
-                <Text
-                  variant="bodyMedium"
-                  style={{ color: theme.colors.onSurfaceVariant }}
-                >
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                   {loading ? "Loading notifications..." : "You're all caught up!"}
                 </Text>
               ) : (
@@ -229,7 +200,7 @@ export default function AppHeader({
                       variant="titleSmall"
                       style={{
                         color: theme.colors.onSurface,
-                        fontWeight: "600",
+                        fontWeight: typography.fontWeights.semibold,
                         marginBottom: spacing.xs,
                       }}
                     >
@@ -240,6 +211,7 @@ export default function AppHeader({
                       style={{
                         color: theme.colors.onSurfaceVariant,
                         marginBottom: spacing.sm,
+                        lineHeight: typography.lineHeights.relaxed * 14,
                       }}
                     >
                       {notification.message}
@@ -253,17 +225,12 @@ export default function AppHeader({
                       <Button
                         mode="text"
                         style={{ marginRight: spacing.xs }}
-                        onPress={() =>
-                          void handleDismissNotification(notification.id)
-                        }
+                        onPress={() => void handleDismissNotification(notification.id)}
                         textColor={theme.colors.onSurfaceVariant}
                       >
                         Dismiss
                       </Button>
-                      <Button
-                        mode="contained"
-                        onPress={() => void handleViewNotification(notification)}
-                      >
+                      <Button mode="contained" onPress={() => void handleViewNotification(notification)}>
                         View
                       </Button>
                     </View>
@@ -282,5 +249,5 @@ export default function AppHeader({
         </Dialog>
       </Portal>
     </LinearGradient>
-  );
+  )
 }

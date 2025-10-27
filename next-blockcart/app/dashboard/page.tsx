@@ -22,17 +22,17 @@ export default async function DashboardPage() {
   const role = isWebUser(user) ? deriveUserRoleFromMetadata(user) : "reviewer"
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Overview of your Blockcart operations</p>
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h1 className="text-balance text-4xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-pretty text-base text-muted-foreground">Overview of your Blockcart operations</p>
       </div>
 
       <Suspense fallback={<StatsSectionSkeleton showAdminWidgets={role === "admin"} />}>
         <StatsSection role={role} />
       </Suspense>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <Suspense fallback={<RecentReceiptsSkeleton />}>
           <RecentReceiptsSection />
         </Suspense>
