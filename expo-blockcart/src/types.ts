@@ -121,7 +121,7 @@ export type ReviewNotificationStatus = "unread" | "read";
 
 export type ReviewNotification = {
   id: string;
-  user_id: string;
+  reviewer_id: string;
   receipt_id: string;
   title: string;
   message: string;
