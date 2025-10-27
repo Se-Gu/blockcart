@@ -14,6 +14,16 @@ function toNumber(value, fallback = 0) {
   }
   return fallback;
 }
+function toNullableNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 serve(async (req)=>{
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -85,7 +95,14 @@ serve(async (req)=>{
         })),
       rewardBreakdown: rewardBreakdown.map((row)=>({
           label: row.label,
-          value: toNumber(row.value)
+          value: toNumber(row.value),
+          campaignId: row.campaign_id ?? null,
+          paidValue: toNumber(row.paid_reward_amount, 0),
+          rewardsIssued: toNumber(row.rewards_issued, 0),
+          rewardsPaid: toNumber(row.rewards_paid, 0),
+          currentParticipants: toNullableNumber(row.current_participants),
+          maxParticipants: toNullableNumber(row.max_participants),
+          saturation: toNullableNumber(row.saturation_ratio)
         })),
       reviewerPerformance: reviewerPerformance.map((row)=>({
           id: row.reviewer_id,

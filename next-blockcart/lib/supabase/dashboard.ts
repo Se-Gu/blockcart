@@ -13,9 +13,15 @@ export interface RewardStats {
 }
 
 export interface CampaignPerformance {
-  id: string;
+  id: string | null;
   name: string;
   totalRewards: number;
+  paidRewards: number;
+  rewardCount: number;
+  paidCount: number;
+  currentParticipants: number | null;
+  maxParticipants: number | null;
+  saturationRatio: number | null;
 }
 
 export interface ActivityEvent {
@@ -148,58 +154,90 @@ export async function fetchRewardStats(
 export async function fetchTopCampaigns(
   supabase: SupabaseClient
 ): Promise<CampaignPerformance[]> {
-  const [rewardsResult, campaignsResult] = await Promise.all([
-    supabase
-      .from("rewards")
-      .select("campaign_id, amount")
-      .not("campaign_id", "is", null),
-    supabase.from("campaigns").select("id, brand"),
-  ]);
+  const { data, error } = await supabase
+    .from("analytics_campaign_summary")
+    .select(
+      "campaign_id, campaign_label, total_reward_amount, paid_reward_amount, rewards_issued, rewards_paid, current_participants, max_participants, saturation_ratio"
+    )
+    .order("total_reward_amount", { ascending: false })
+    .limit(5);
 
-  if (rewardsResult.error) {
-    console.error("Failed to fetch top campaigns", rewardsResult.error);
+  if (error) {
+    console.error("Failed to fetch campaign performance", error);
     return [];
   }
 
-  if (campaignsResult.error) {
-    console.error("Failed to fetch campaigns", campaignsResult.error);
-  }
+  return (data ?? [])
+    .map((entry, index) => {
+      const safeTotal = Number(
+        (entry as { total_reward_amount?: number | string | null })
+          .total_reward_amount ?? 0
+      );
 
-  const campaignNames = new Map<string, string>();
-  for (const campaign of campaignsResult.data ?? []) {
-    const id = (campaign as { id?: string | null }).id;
-    if (!id) continue;
-    const brand = (campaign as { brand?: string | null }).brand;
-    campaignNames.set(
-      id,
-      brand && brand.trim().length > 0 ? brand : "Unnamed Campaign"
-    );
-  }
+      const totalRewards = Number.isFinite(safeTotal) ? safeTotal : 0;
 
-  const totals = new Map<string, { name: string; total: number }>();
+      const paidValue = Number(
+        (entry as { paid_reward_amount?: number | string | null })
+          .paid_reward_amount ?? 0
+      );
 
-  for (const reward of rewardsResult.data ?? []) {
-    const campaignId = (reward as { campaign_id?: string | null }).campaign_id;
-    if (!campaignId) continue;
+      const rewardsIssued = Number(
+        (entry as { rewards_issued?: number | string | null }).rewards_issued ?? 0
+      );
+      const rewardsPaid = Number(
+        (entry as { rewards_paid?: number | string | null }).rewards_paid ?? 0
+      );
 
-    const amount = Number(
-      (reward as { amount?: number | string | null }).amount ?? 0
-    );
-    const campaignName =
-      campaignNames.get(campaignId) ??
-      `Campaign ${campaignId.slice(0, 4)}${campaignId.length > 4 ? "…" : ""}`;
+      const campaignId = (entry as { campaign_id?: string | null }).campaign_id ?? null;
+      const label =
+        (entry as { campaign_label?: string | null }).campaign_label ??
+        (campaignId
+          ? `Campaign ${campaignId.slice(0, 4)}${campaignId.length > 4 ? "…" : ""}`
+          : `Campaign ${index + 1}`);
 
-    if (!totals.has(campaignId)) {
-      totals.set(campaignId, { name: campaignName, total: 0 });
-    }
+      const currentParticipantsRaw = (entry as {
+        current_participants?: number | string | null;
+      }).current_participants;
+      const maxParticipantsRaw = (entry as {
+        max_participants?: number | string | null;
+      }).max_participants;
+      const saturationRaw = (entry as {
+        saturation_ratio?: number | string | null;
+      }).saturation_ratio;
 
-    const entry = totals.get(campaignId)!;
-    entry.total += Number.isFinite(amount) ? amount : 0;
-  }
+      const currentParticipants =
+        currentParticipantsRaw === null || currentParticipantsRaw === undefined
+          ? null
+          : Number(currentParticipantsRaw);
+      const maxParticipants =
+        maxParticipantsRaw === null || maxParticipantsRaw === undefined
+          ? null
+          : Number(maxParticipantsRaw);
+      const saturationRatio =
+        saturationRaw === null || saturationRaw === undefined
+          ? null
+          : Number(saturationRaw);
 
-  return Array.from(totals.entries())
-    .map(([id, value]) => ({ id, name: value.name, totalRewards: value.total }))
-    .sort((a, b) => b.totalRewards - a.totalRewards)
+      return {
+        id: campaignId,
+        name: label,
+        totalRewards,
+        paidRewards: Number.isFinite(paidValue) ? paidValue : 0,
+        rewardCount: Number.isFinite(rewardsIssued) ? rewardsIssued : 0,
+        paidCount: Number.isFinite(rewardsPaid) ? rewardsPaid : 0,
+        currentParticipants: Number.isFinite(currentParticipants ?? 0)
+          ? currentParticipants
+          : null,
+        maxParticipants: Number.isFinite(maxParticipants ?? 0)
+          ? maxParticipants
+          : null,
+        saturationRatio:
+          typeof saturationRatio === "number" && Number.isFinite(saturationRatio)
+            ? saturationRatio
+            : null,
+      } satisfies CampaignPerformance;
+    })
+    .filter((campaign) => campaign.totalRewards > 0)
     .slice(0, 3);
 }
 
