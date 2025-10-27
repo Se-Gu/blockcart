@@ -151,19 +151,69 @@ from
 order by
   days.day;
 
-create view public.analytics_reward_breakdown as
+create view public.analytics_campaign_summary as
 select
-  coalesce(c.brand, 'Unattributed'::text) as label,
-  coalesce(sum(r.amount), 0)::double precision as value
+  c.id as campaign_id,
+  coalesce(nullif(c.name, ''), nullif(c.brand, ''), 'Campaign '::text || left(c.id::text, 8)) as campaign_label,
+  c.brand,
+  c.name,
+  c.description,
+  coalesce(sum(r.amount), 0)::double precision as total_reward_amount,
+  coalesce(sum(case when r.status = 'paid'::text then r.amount else 0 end), 0)::double precision as paid_reward_amount,
+  coalesce(count(r.id), 0)::bigint as rewards_issued,
+  coalesce(sum(case when r.status = 'paid'::text then 1 else 0 end), 0)::bigint as rewards_paid,
+  c.current_participants,
+  c.max_participants,
+  case
+    when c.max_participants is not null and c.max_participants > 0 then
+      least(1.0, coalesce(c.current_participants, 0)::double precision / c.max_participants)
+    else null::double precision
+  end as saturation_ratio
+from
+  campaigns c
+  left join rewards r on r.campaign_id = c.id
+group by
+  c.id
+union all
+select
+  null::uuid as campaign_id,
+  'Unattributed'::text as campaign_label,
+  null::text as brand,
+  null::text as name,
+  null::text as description,
+  coalesce(sum(r.amount), 0)::double precision as total_reward_amount,
+  coalesce(sum(case when r.status = 'paid'::text then r.amount else 0 end), 0)::double precision as paid_reward_amount,
+  coalesce(count(r.id), 0)::bigint as rewards_issued,
+  coalesce(sum(case when r.status = 'paid'::text then 1 else 0 end), 0)::bigint as rewards_paid,
+  null::integer as current_participants,
+  null::integer as max_participants,
+  null::double precision as saturation_ratio
 from
   rewards r
-  left join campaigns c on c.id = r.campaign_id
+where
+  r.campaign_id is null
 group by
-  coalesce(c.brand, 'Unattributed'::text)
+  1
 having
-  coalesce(sum(r.amount), 0) <> 0
+  coalesce(sum(r.amount), 0) <> 0;
+
+create view public.analytics_reward_breakdown as
+select
+  summary.campaign_label as label,
+  summary.total_reward_amount as value,
+  summary.campaign_id,
+  summary.paid_reward_amount,
+  summary.rewards_issued,
+  summary.rewards_paid,
+  summary.current_participants,
+  summary.max_participants,
+  summary.saturation_ratio
+from
+  public.analytics_campaign_summary summary
+where
+  summary.total_reward_amount <> 0
 order by
-  value desc;
+  summary.total_reward_amount desc;
 
 create view public.analytics_reviewer_performance as
 with monthly_assignments as (
