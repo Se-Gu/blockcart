@@ -5,11 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import type { Campaign, CampaignEligibility, CampaignProgress } from "../types";
 
-const FUNCTION_NAMES = [
-  "eligible-campaigns",
-  "campaign-eligibility",
-  "get-eligible-campaigns",
-] as const;
+const FUNCTION_NAMES = ["eligible-campaigns"] as const;
 
 const STORAGE_KEY_PREFIX = "blockcart:campaign-notifications";
 const NEAR_LIMIT_THRESHOLD = 0.8;
