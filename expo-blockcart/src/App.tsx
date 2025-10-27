@@ -167,7 +167,7 @@ export default function App() {
           event: "UPDATE",
           schema: "public",
           table: "receipts",
-          filter: `user_id=eq.${session.user.id}`,
+          filter: `reviewer_id=eq.${session.user.id}`,
         },
         async (payload: RealtimePostgresChangesPayload<Receipt>) => {
           const newRow = (payload.new ?? {}) as Partial<Receipt>;
@@ -201,7 +201,7 @@ export default function App() {
           event: "INSERT",
           schema: "public",
           table: "reviewer_notifications",
-          filter: `user_id=eq.${session.user.id}`,
+          filter: `reviewer_id=eq.${session.user.id}`,
         },
         async (payload: RealtimePostgresChangesPayload<ReviewNotification>) => {
           const notification = payload.new as ReviewNotification | null;
