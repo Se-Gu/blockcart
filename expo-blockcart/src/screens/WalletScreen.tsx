@@ -30,10 +30,63 @@ import { colors, spacing, borderRadius } from "../theme/colors";
 
 const TRANSACTION_LIMIT = 10;
 
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const formatCurrency = (value: number | null | undefined): string => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "0.00";
+  }
+  return value.toFixed(2);
+};
+
+const getCampaignLabel = (reward: RewardRow): string | null => {
+  if (typeof reward.campaign_name === "string" && reward.campaign_name.trim()) {
+    return reward.campaign_name;
+  }
+
+  const campaign = reward.campaign;
+  if (!campaign) {
+    return null;
+  }
+
+  if (campaign.name && campaign.name.trim()) {
+    return campaign.name;
+  }
+
+  if (campaign.brand && campaign.brand.trim()) {
+    return campaign.brand;
+  }
+
+  return null;
+};
+
 type RewardRow = Reward & {
   receipt?: {
     store: string | null;
   } | null;
+  campaign?: {
+    id?: string | null;
+    name?: string | null;
+    brand?: string | null;
+    multiplier?: number | null;
+    reward_amount?: number | null;
+  } | null;
+};
+
+type RewardRowWithDetails = RewardRow & {
+  amount: number;
+  campaignBonus: number | null;
+  campaignLabel: string | null;
+  campaignMultiplier: number | null;
 };
 
 type BalanceRow = Pick<UserBalance, "total_balance">;
@@ -45,7 +98,7 @@ export default function WalletScreen(_props: Props) {
   const theme = useTheme();
   const { handleError } = useErrorHandler({ context: "Wallet" });
   const [totalBalance, setTotalBalance] = useState<number | null>(null);
-  const [transactions, setTransactions] = useState<RewardRow[]>([]);
+  const [transactions, setTransactions] = useState<RewardRowWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -63,7 +116,9 @@ export default function WalletScreen(_props: Props) {
           .maybeSingle(),
         supabase
           .from("rewards")
-          .select("id, amount, created_at, receipt:receipts(store)")
+          .select(
+            `id, amount, created_at, description, campaign_id, receipt:receipts(store), campaign:campaigns!rewards_campaign_id_fkey ( id, name, brand, multiplier, reward_amount )`
+          )
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(TRANSACTION_LIMIT),
@@ -82,8 +137,27 @@ export default function WalletScreen(_props: Props) {
         ? (rewardsRaw as RewardRow[])
         : [];
 
+      const normalizedRewards = rewardRows.map((reward) => {
+        const amount = parseNumber(reward.amount) ?? 0;
+        const campaignLabel = getCampaignLabel(reward);
+        const campaignBonus =
+          parseNumber(reward.bonus_amount) ??
+          (reward.campaign ? parseNumber(reward.campaign.reward_amount) : null);
+        const campaignMultiplier =
+          parseNumber(reward.campaign_multiplier) ??
+          (reward.campaign ? parseNumber(reward.campaign.multiplier) : null);
+
+        return {
+          ...reward,
+          amount,
+          campaignLabel,
+          campaignBonus,
+          campaignMultiplier,
+        };
+      });
+
       setTotalBalance(balanceData?.total_balance ?? 0);
-      setTransactions(rewardRows);
+      setTransactions(normalizedRewards);
     } catch (err) {
       handleError(err, "Loading wallet");
     } finally {
@@ -157,6 +231,16 @@ export default function WalletScreen(_props: Props) {
       color: colors.approved,
       alignSelf: "center",
       marginRight: spacing.sm,
+    },
+    rewardAmountWrapper: {
+      alignItems: "flex-end",
+      justifyContent: "center",
+      marginRight: spacing.sm,
+      gap: 2,
+    },
+    rewardBonus: {
+      fontSize: 12,
+      color: colors.textSecondary,
     },
     emptyState: {
       paddingVertical: spacing.xl,
@@ -242,31 +326,51 @@ export default function WalletScreen(_props: Props) {
                 elevation={1}
               >
                 <List.Item
-                  title="Receipt Reward"
+                  title={reward.campaignLabel ?? "Receipt Reward"}
                   titleStyle={{ fontWeight: "600" }}
-                  description={`${new Date(
-                    reward.created_at
-                  ).toLocaleDateString()} • ${
-                    reward.receipt?.store ?? "Unknown store"
-                  }`}
+                  description={[
+                    new Date(reward.created_at).toLocaleDateString(),
+                    reward.receipt?.store ?? "Unknown store",
+                    reward.description ?? null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
                   left={() => (
                     <View
                       style={[
                         dynamicStyles.iconContainer,
-                        { backgroundColor: `${colors.approved}20` },
+                        {
+                          backgroundColor: reward.campaignLabel
+                            ? `${colors.accent}25`
+                            : `${colors.approved}20`,
+                        },
                       ]}
                     >
                       <IconButton
-                        icon="plus-circle"
+                        icon={reward.campaignLabel ? "bullhorn" : "plus-circle"}
                         size={24}
-                        iconColor={colors.approved}
+                        iconColor={
+                          reward.campaignLabel ? colors.accent : colors.approved
+                        }
                       />
                     </View>
                   )}
                   right={() => (
-                    <Text style={dynamicStyles.rewardAmount}>
-                      +{reward.amount.toFixed(2)} BTC$
-                    </Text>
+                    <View style={dynamicStyles.rewardAmountWrapper}>
+                      <Text style={dynamicStyles.rewardAmount}>
+                        +{formatCurrency(reward.amount)} BTC$
+                      </Text>
+                      {reward.campaignBonus ? (
+                        <Text style={dynamicStyles.rewardBonus}>
+                          Bonus +{formatCurrency(reward.campaignBonus)} BTC$
+                        </Text>
+                      ) : null}
+                      {reward.campaignMultiplier && reward.campaignMultiplier > 1 ? (
+                        <Text style={dynamicStyles.rewardBonus}>
+                          {reward.campaignMultiplier.toFixed(2)}x multiplier
+                        </Text>
+                      ) : null}
+                    </View>
                   )}
                 />
               </Surface>
