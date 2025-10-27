@@ -32,7 +32,7 @@ type NotificationsProviderProps = {
 };
 
 const selectColumns =
-  "id, receipt_id, user_id, title, message, status, metadata, created_at, read_at";
+  "id, receipt_id, reviewer_id, title, message, status, metadata, created_at, read_at";
 
 export function NotificationsProvider({ children }: NotificationsProviderProps) {
   const { session } = useAuth();
@@ -49,9 +49,9 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("review_notifications")
+        .from("reviewer_notifications")
         .select(selectColumns)
-        .eq("user_id", userId)
+        .eq("reviewer_id", userId)
         .eq("status", "unread")
         .order("created_at", { ascending: false });
 
@@ -88,8 +88,8 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         {
           event: "INSERT",
           schema: "public",
-          table: "review_notifications",
-          filter: `user_id=eq.${userId}`,
+          table: "reviewer_notifications",
+          filter: `reviewer_id=eq.${userId}`,
         },
         (payload) => {
           const newNotification = payload.new as ReviewNotification | null;
@@ -124,13 +124,13 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
 
       try {
         const { data, error } = await supabase
-          .from("review_notifications")
+          .from("reviewer_notifications")
           .update({
             status: "read",
             read_at: new Date().toISOString(),
           })
           .eq("id", notificationId)
-          .eq("user_id", userId)
+          .eq("reviewer_id", userId)
           .select(selectColumns)
           .maybeSingle();
 
@@ -168,12 +168,12 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
 
     try {
       await supabase
-        .from("review_notifications")
+        .from("reviewer_notifications")
         .update({
           status: "read",
           read_at: new Date().toISOString(),
         })
-        .eq("user_id", userId)
+        .eq("reviewer_id", userId)
         .eq("status", "unread");
 
       setNotifications([]);

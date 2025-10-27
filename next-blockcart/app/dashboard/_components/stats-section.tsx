@@ -217,12 +217,35 @@ export async function StatsSection({ role }: StatsSectionProps) {
               {topCampaigns.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No campaign performance data available.</p>
               ) : (
-                topCampaigns.map((campaign) => (
-                  <div key={campaign.id} className="flex items-center justify-between text-sm">
-                    <div className="font-medium">{campaign.name}</div>
-                    <div className="text-muted-foreground">{formatCurrency(campaign.totalRewards)}</div>
-                  </div>
-                ))
+                topCampaigns.map((campaign, index) => {
+                  const participantCopy = campaign.maxParticipants
+                    ? `${Math.round(
+                        Math.min(Math.max((campaign.saturationRatio ?? 0) * 100, 0), 100)
+                      )}% capacity`
+                    : "Open";
+
+                  return (
+                    <div
+                      key={campaign.id ?? `campaign-${index}`}
+                      className="flex items-center justify-between gap-4 text-sm"
+                    >
+                      <div className="space-y-1">
+                        <div className="font-medium leading-none">{campaign.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {campaign.rewardCount} payouts · {campaign.paidCount} redeemed · {participantCopy}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium leading-none">
+                          {formatCurrency(campaign.totalRewards)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(campaign.paidRewards)} paid
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </CardContent>
           </Card>

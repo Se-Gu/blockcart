@@ -220,6 +220,13 @@ serve(async (req) => {
     const now = new Date().toISOString();
     const trimmedComment = typeof comment === "string" ? comment.trim() : "";
     let rewardAmount: number | null = null;
+    let campaignMatch:
+      | {
+        campaign_id: string;
+        amount: number | null;
+        description: string | null;
+      }
+      | null = null;
 
     const receiptUpdate: Record<string, unknown> = {
       reviewed_by: reviewer_id,
@@ -350,7 +357,64 @@ serve(async (req) => {
 
     if (approved) {
       try {
+        const { data: matchData, error: matchError } = await supabase.rpc(
+          "match_active_campaigns",
+          { p_receipt_id: receipt_id },
+        );
+
+        if (matchError) {
+          console.warn(
+            `[review-handler] Campaign matching failed for receipt ${receipt_id}`,
+            matchError,
+          );
+        } else if (Array.isArray(matchData) && matchData.length > 0) {
+          const firstMatch = matchData[0] as
+            | {
+              campaign_id?: string | null;
+              amount?: number | string | null;
+              description?: string | null;
+            }
+            | undefined;
+
+          if (firstMatch?.campaign_id) {
+            const parsedAmount = normalizeNumeric(firstMatch.amount);
+            campaignMatch = {
+              campaign_id: firstMatch.campaign_id,
+              amount: parsedAmount,
+              description: typeof firstMatch.description === "string"
+                ? firstMatch.description
+                : null,
+            };
+
+            if (parsedAmount !== null) {
+              rewardAmount = parsedAmount;
+            }
+          }
+        }
+      } catch (matchError) {
+        console.error(
+          `[review-handler] Unexpected error while matching campaigns for receipt ${receipt_id}`,
+          matchError,
+        );
+      }
+
+      try {
         const rewardUrl = `${supabaseUrl}/functions/v1/reward-handler`;
+        const rewardRequestPayload: Record<string, unknown> = {
+          receipt_id,
+          user_id,
+        };
+
+        if (campaignMatch) {
+          rewardRequestPayload.campaign_id = campaignMatch.campaign_id;
+          if (campaignMatch.amount !== null) {
+            rewardRequestPayload.amount = campaignMatch.amount;
+          }
+          if (campaignMatch.description) {
+            rewardRequestPayload.description = campaignMatch.description;
+          }
+        }
+
         const rewardResponse = await fetch(
           rewardUrl,
           {
@@ -361,10 +425,7 @@ serve(async (req) => {
               apikey: serviceRoleKey,
               Authorization: `Bearer ${serviceRoleKey}`,
             },
-            body: JSON.stringify({
-              receipt_id,
-              user_id,
-            }),
+            body: JSON.stringify(rewardRequestPayload),
           },
         );
 
@@ -444,7 +505,7 @@ serve(async (req) => {
         .eq("id", receipt_id)
         .maybeSingle();
 
-      if (receiptDetailsError) {
+      if (receireviewer_notifications
         console.error(
           `[review-handler] Failed to fetch receipt details for notifications ${receipt_id}`,
           receiptDetailsError,
