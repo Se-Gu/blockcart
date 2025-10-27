@@ -25,6 +25,46 @@ export type ReceiptExtractedFields = {
   [key: string]: unknown;
 };
 
+export type CampaignStatus = "active" | "inactive" | "completed" | string;
+
+export type CampaignEligibility = {
+  qualifies?: boolean;
+  reasons?: string[];
+  nextSteps?: string | null;
+};
+
+export type CampaignProgress = {
+  percentComplete?: number | null;
+  receiptsSubmitted?: number | null;
+  receiptsRemaining?: number | null;
+  remainingRewards?: number | null;
+  remainingBudget?: number | null;
+  amountAwarded?: number | null;
+  amountRemaining?: number | null;
+  isNearLimit?: boolean | null;
+};
+
+export type Campaign = {
+  id: string;
+  brand: string;
+  name?: string | null;
+  description?: string | null;
+  multiplier?: number | null;
+  reward_amount?: number | null;
+  rule_json?: Record<string, unknown> | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  status?: CampaignStatus | null;
+  max_participants?: number | null;
+  current_participants?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  highlight_text?: string | null;
+  bonus_text?: string | null;
+  eligibility?: CampaignEligibility | null;
+  progress?: CampaignProgress | null;
+};
+
 export type Receipt = {
   id: string;
   user_id?: string;
@@ -53,6 +93,11 @@ export type Reward = {
   created_at: string;
   description?: string | null;
   receipt_id?: string | null;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  campaign_multiplier?: number | null;
+  campaign_reward_amount?: number | null;
+  bonus_amount?: number | null;
 };
 
 export type UserBalance = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, ScrollView, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
@@ -9,6 +9,7 @@ import {
   Portal,
   Surface,
   Text,
+  TextInput,
   useTheme,
   IconButton,
 } from "react-native-paper";
@@ -20,10 +21,105 @@ import { useAuth } from "../context/AuthContext";
 import { useErrorHandler } from "../hooks/useErrorHandler";
 import { useToast } from "../components/ToastProvider";
 import type { ReceiptsStackParamList } from "../navigation/MainNavigator";
-import type { ReceiptStatus } from "../types";
+import type { Campaign, ReceiptStatus } from "../types";
 import { colors, spacing, borderRadius } from "../theme/colors";
+import { useActiveCampaigns } from "../hooks/useCampaignPromotions";
 
 const DAILY_RECEIPT_LIMIT = 2;
+
+type BonusPreview = {
+  campaign: Campaign;
+  potentialBonus: number | null;
+  multiplier: number | null;
+};
+
+const parseNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const parseCurrencyValue = (value: string): number | null => {
+  if (!value) {
+    return null;
+  }
+  const sanitized = value.replace(/[^0-9.,]/g, "").replace(/,/g, ".");
+  if (!sanitized) {
+    return null;
+  }
+  const parsed = Number(sanitized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatCurrency = (value: number | null | undefined): string => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "--";
+  }
+  return value.toFixed(2);
+};
+
+const matchesStoreRule = (campaign: Campaign, store: string): boolean => {
+  const trimmedStore = store.trim().toLowerCase();
+  if (!trimmedStore) {
+    return true;
+  }
+
+  const rules = campaign.rule_json;
+  if (!rules) {
+    return true;
+  }
+
+  const storeKeys = [
+    (rules as Record<string, unknown>).stores,
+    (rules as Record<string, unknown>).eligibleStores,
+    (rules as Record<string, unknown>).eligible_stores,
+    (rules as Record<string, unknown>).allowedStores,
+  ];
+
+  const validLists = storeKeys.filter(Array.isArray) as unknown[][];
+  if (validLists.length === 0) {
+    return true;
+  }
+
+  return validLists.some((list) =>
+    list.some((item) =>
+      typeof item === "string" && trimmedStore.includes(item.toLowerCase()),
+    ),
+  );
+};
+
+const computePotentialBonus = (
+  campaign: Campaign,
+  total: number,
+): { bonus: number | null; multiplier: number | null } => {
+  const rewardAmount = parseNumber(campaign.reward_amount);
+  const multiplier = parseNumber(campaign.multiplier);
+
+  if (rewardAmount && rewardAmount > 0) {
+    return { bonus: rewardAmount, multiplier };
+  }
+
+  if (multiplier && multiplier > 1) {
+    return {
+      bonus: Number((total * (multiplier - 1)).toFixed(2)),
+      multiplier,
+    };
+  }
+
+  if (multiplier && multiplier > 0) {
+    return {
+      bonus: Number((total * multiplier).toFixed(2)),
+      multiplier,
+    };
+  }
+
+  return { bonus: null, multiplier };
+};
 
 type Props = NativeStackScreenProps<ReceiptsStackParamList, "UploadReceipt">;
 
@@ -32,6 +128,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
   const { session } = useAuth();
   const { handleError } = useErrorHandler({ context: "Receipt Upload" });
   const { showSuccess, showWarning } = useToast();
+  const { campaigns } = useActiveCampaigns();
   const [selectedImage, setSelectedImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +138,21 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     null
   );
   const [eta, setEta] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState("");
+  const [receiptTotal, setReceiptTotal] = useState("");
+  const [bonusPreview, setBonusPreview] = useState<BonusPreview | null>(null);
+  const [successCampaign, setSuccessCampaign] = useState<
+    { name: string | null; bonusText: string | null } | null
+  >(null);
+
+  const handleStoreChange = useCallback((value: string) => {
+    setStoreName(value);
+  }, []);
+
+  const handleTotalChange = useCallback((value: string) => {
+    const sanitized = value.replace(/[^0-9.,]/g, "");
+    setReceiptTotal(sanitized);
+  }, []);
 
   const pickImage = useCallback(async () => {
     const mediaLibraryPermission =
@@ -126,6 +238,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     setSuccessMessage(null);
     setSuccessStatus(null);
     setEta(null);
+    setSuccessCampaign(null);
     setSubmitting(true);
 
     try {
@@ -179,6 +292,16 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         message?: string;
         status?: ReceiptStatus;
         eta?: string;
+        reward?: {
+          amount?: number;
+          bonus_amount?: number;
+          campaign_id?: string | null;
+          campaign_name?: string | null;
+          campaign_multiplier?: number | null;
+          campaign_reward_amount?: number | null;
+          campaign_brand?: string | null;
+        };
+        campaign?: (Campaign & { bonus_amount?: number | null }) | null;
       };
 
       if (result.success === false) {
@@ -188,17 +311,56 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         return;
       }
 
-      const message =
+      const rewardDetails = result.reward ?? null;
+      const rewardCampaign = result.campaign ?? null;
+      const bonusAmount =
+        parseNumber(rewardDetails?.bonus_amount) ??
+        parseNumber(rewardDetails?.campaign_reward_amount) ??
+        parseNumber(rewardCampaign?.reward_amount);
+      const multiplier =
+        parseNumber(rewardDetails?.campaign_multiplier) ??
+        parseNumber(rewardCampaign?.multiplier);
+      const campaignName =
+        rewardDetails?.campaign_name ??
+        rewardCampaign?.name ??
+        rewardDetails?.campaign_brand ??
+        rewardCampaign?.brand ??
+        null;
+
+      const campaignInfo =
+        campaignName || (bonusAmount && bonusAmount > 0) || (multiplier && multiplier > 1)
+          ? {
+              name: campaignName,
+              bonusText:
+                bonusAmount && bonusAmount > 0
+                  ? `Bonus: +${bonusAmount.toFixed(2)} BTC$`
+                  : multiplier && multiplier > 1
+                    ? `${multiplier.toFixed(2)}x rewards applied`
+                    : null,
+            }
+          : null;
+
+      const baseMessage =
         result.message ??
         "Receipt uploaded successfully. Pending review will begin shortly.";
       const status = result.status ?? "pending_review";
+
+      const message = campaignInfo
+        ? `${baseMessage} — ${campaignInfo.name ?? "Campaign"}${
+            campaignInfo.bonusText ? ` • ${campaignInfo.bonusText}` : " bonus applied"
+          }`
+        : baseMessage;
 
       showSuccess(message);
       setSuccessMessage(message);
       setSuccessStatus(status);
       setEta(result.eta ?? null);
+      setSuccessCampaign(campaignInfo);
       setSuccessVisible(true);
       setSelectedImage(null);
+      setStoreName("");
+      setReceiptTotal("");
+      setBonusPreview(null);
     } catch (error) {
       handleError(error, "Uploading receipt");
     } finally {
@@ -223,6 +385,51 @@ export default function UploadReceiptScreen({ navigation }: Props) {
     }
     return etaDate.toLocaleString();
   }, [eta]);
+
+  useEffect(() => {
+    const totalValue = parseCurrencyValue(receiptTotal);
+    if (!totalValue || totalValue <= 0) {
+      setBonusPreview(null);
+      return;
+    }
+
+    const eligibleCampaigns = campaigns.filter((campaign) =>
+      matchesStoreRule(campaign, storeName),
+    );
+
+    if (eligibleCampaigns.length === 0) {
+      setBonusPreview(null);
+      return;
+    }
+
+    let best: BonusPreview | null = null;
+
+    for (const campaign of eligibleCampaigns) {
+      const { bonus, multiplier } = computePotentialBonus(campaign, totalValue);
+      const normalizedBonus = bonus ?? 0;
+
+      if (!best) {
+        best = { campaign, potentialBonus: bonus, multiplier };
+        continue;
+      }
+
+      const bestValue = best.potentialBonus ?? 0;
+
+      if (normalizedBonus > bestValue) {
+        best = { campaign, potentialBonus: bonus, multiplier };
+        continue;
+      }
+
+      if (
+        normalizedBonus === bestValue &&
+        (multiplier ?? 0) > (best.multiplier ?? 0)
+      ) {
+        best = { campaign, potentialBonus: bonus, multiplier };
+      }
+    }
+
+    setBonusPreview(best);
+  }, [campaigns, receiptTotal, storeName]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -302,6 +509,66 @@ export default function UploadReceiptScreen({ navigation }: Props) {
           )}
         </View>
 
+        <View style={styles.detailsSection}>
+          <Text variant="titleMedium" style={styles.detailsTitle}>
+            Receipt details
+          </Text>
+          <TextInput
+            mode="outlined"
+            label="Store"
+            value={storeName}
+            onChangeText={handleStoreChange}
+            style={styles.textInput}
+            autoCapitalize="words"
+            left={<TextInput.Icon icon="store" />}
+          />
+          <TextInput
+            mode="outlined"
+            label="Receipt total"
+            value={receiptTotal}
+            onChangeText={handleTotalChange}
+            style={styles.textInput}
+            keyboardType="decimal-pad"
+            left={<TextInput.Icon icon="currency-btc" />}
+          />
+
+          <Surface style={styles.bonusCard} elevation={1}>
+            <LinearGradient
+              colors={[`${colors.primary}25`, `${colors.accent}20`]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bonusGradient}
+            >
+              <Text variant="titleMedium" style={styles.bonusTitle}>
+                Bonus preview
+              </Text>
+              {bonusPreview ? (
+                <>
+                  <Text style={styles.bonusCampaignName}>
+                    {bonusPreview.campaign.name ?? bonusPreview.campaign.brand}
+                  </Text>
+                  <Text style={styles.bonusHighlight}>
+                    Potential bonus: +
+                    {formatCurrency(bonusPreview.potentialBonus ?? 0)} BTC$
+                  </Text>
+                  {bonusPreview.multiplier ? (
+                    <Text style={styles.bonusMeta}>
+                      Multiplier: {bonusPreview.multiplier.toFixed(2)}x
+                    </Text>
+                  ) : null}
+                  <Text style={styles.bonusFooter}>
+                    Submit now to lock in this promotion.
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.bonusSubtitle}>
+                  Enter a store and total to preview eligible campaign bonuses.
+                </Text>
+              )}
+            </LinearGradient>
+          </Surface>
+        </View>
+
         <View style={styles.actionsContainer}>
           <View style={styles.buttonRow}>
             <Surface style={styles.actionButtonSurface} elevation={1}>
@@ -373,6 +640,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             setSuccessMessage(null);
             setSuccessStatus(null);
             setEta(null);
+            setSuccessCampaign(null);
           }}
           contentContainerStyle={[
             styles.modal,
@@ -400,6 +668,18 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             {successMessage ??
               "We're processing your receipt. You'll be notified when it's approved."}
           </Text>
+          {successCampaign ? (
+            <Text variant="bodyMedium" style={styles.modalCampaignText}>
+              {successCampaign.name
+                ? `${successCampaign.name} bonus unlocked`
+                : "Campaign bonus unlocked"}
+            </Text>
+          ) : null}
+          {successCampaign?.bonusText ? (
+            <Text variant="bodyMedium" style={styles.modalCampaignText}>
+              {successCampaign.bonusText}
+            </Text>
+          ) : null}
           {successStatus ? (
             <Text variant="bodyMedium" style={styles.modalStatus}>
               Current status: {successStatus.replace("_", " ")}
@@ -427,6 +707,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
                 setSuccessMessage(null);
                 setSuccessStatus(null);
                 setEta(null);
+                setSuccessCampaign(null);
                 navigation.goBack();
               }}
             >
@@ -482,6 +763,15 @@ const styles = StyleSheet.create({
   imageSection: {
     padding: spacing.lg,
   },
+  detailsSection: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  detailsTitle: {
+    fontWeight: "700",
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
   imageContainer: {
     borderRadius: borderRadius.xl,
     height: 320,
@@ -517,6 +807,9 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     overflow: "hidden",
   },
+  textInput: {
+    backgroundColor: colors.surface,
+  },
   dropZoneGradient: {
     padding: spacing.xl * 2,
     alignItems: "center",
@@ -539,6 +832,37 @@ const styles = StyleSheet.create({
   actionsContainer: {
     padding: spacing.lg,
     gap: spacing.lg,
+  },
+  bonusCard: {
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+  },
+  bonusGradient: {
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  bonusTitle: {
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  bonusCampaignName: {
+    fontWeight: "700",
+    fontSize: 16,
+    color: colors.primaryDark,
+  },
+  bonusHighlight: {
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  bonusMeta: {
+    color: colors.textSecondary,
+  },
+  bonusSubtitle: {
+    color: colors.textSecondary,
+  },
+  bonusFooter: {
+    color: colors.textSecondary,
+    fontSize: 12,
   },
   buttonRow: {
     flexDirection: "row",
@@ -640,6 +964,10 @@ const styles = StyleSheet.create({
   },
   modalEta: {
     color: colors.textSecondary,
+    textAlign: "center",
+  },
+  modalCampaignText: {
+    color: colors.textPrimary,
     textAlign: "center",
   },
 });

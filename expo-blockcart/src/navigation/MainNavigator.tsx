@@ -3,6 +3,7 @@ import { NavigatorScreenParams, ParamListBase } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "react-native-paper";
+import type { Campaign } from "../types";
 import HomeScreen from "../screens/HomeScreen";
 import ReceiptListScreen from "../screens/ReceiptListScreen";
 import ReceiptDetailScreen from "../screens/ReceiptDetailScreen";
@@ -10,7 +11,13 @@ import UploadReceiptScreen from "../screens/UploadReceiptScreen";
 import WalletScreen from "../screens/WalletScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import ReferralScreen from "../screens/ReferralScreen";
+import CampaignDetailScreen from "../screens/CampaignDetailScreen";
 import AppHeader from "../components/AppHeader";
+
+export type HomeStackParamList = {
+  HomeMain: undefined;
+  CampaignDetail: { campaignId: string; campaign?: Campaign };
+};
 
 export type ReceiptsStackParamList = {
   ReceiptList: undefined;
@@ -24,13 +31,14 @@ export type ProfileStackParamList = {
 };
 
 export type AppTabParamList = {
-  Home: undefined;
+  Home: NavigatorScreenParams<HomeStackParamList> | undefined;
   Receipts: NavigatorScreenParams<ReceiptsStackParamList> | undefined;
   Wallet: undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const ReceiptsStack = createNativeStackNavigator<ReceiptsStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -47,6 +55,55 @@ const tabScreenOptions: Record<keyof AppTabParamList, ScreenOptions> = {
   Wallet: { title: "Wallet", tabBarIcon: "wallet" },
   Profile: { title: "Profile", tabBarIcon: "account" },
 };
+
+function HomeStackNavigator() {
+  return (
+    <HomeStack.Navigator
+      screenOptions={({ navigation }) => ({
+        header: ({ navigation: headerNavigation, options, route, back }) => (
+          <AppHeader
+            title={
+              typeof options.headerTitle === "string"
+                ? options.headerTitle
+                : options.title ?? route.name
+            }
+            canGoBack={!!back}
+            onBackPress={() => headerNavigation.goBack()}
+            onNavigateToProfile={() =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Profile", { screen: "ProfileMain" })
+            }
+            onNavigateToReceipt={(receiptId) =>
+              headerNavigation
+                .getParent()
+                ?.navigate("Receipts", {
+                  screen: "ReceiptDetail",
+                  params: { receiptId },
+                })
+            }
+          />
+        ),
+      })}
+    >
+      <HomeStack.Screen
+        name="HomeMain"
+        component={HomeScreen}
+        options={{ title: "Home" }}
+      />
+      <HomeStack.Screen
+        name="CampaignDetail"
+        component={CampaignDetailScreen}
+        options={({ route }) => ({
+          title:
+            route.params.campaign?.name ??
+            route.params.campaign?.brand ??
+            "Campaign Details",
+        })}
+      />
+    </HomeStack.Navigator>
+  );
+}
 
 function ReceiptsStackNavigator() {
   return (
@@ -143,7 +200,7 @@ export default function MainNavigator() {
       screenOptions={({ route }) => {
         // Only show tab-level headers for simple screens, not stack-based ones
         const isStackScreen =
-          route.name === "Receipts" || route.name === "Profile";
+          route.name === "Home" || route.name === "Receipts" || route.name === "Profile";
 
         return {
           ...(isStackScreen
@@ -191,7 +248,11 @@ export default function MainNavigator() {
         };
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen
+        name="Home"
+        component={HomeStackNavigator}
+        options={{ headerShown: false }}
+      />
       <Tab.Screen
         name="Receipts"
         component={ReceiptsStackNavigator}

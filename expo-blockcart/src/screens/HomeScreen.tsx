@@ -1,16 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import {
-  RefreshControl,
-  ScrollView,
-  View,
-  StyleSheet,
-  Pressable,
-} from "react-native";
-import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { useCallback, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, View, StyleSheet, Pressable } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import {
+  ActivityIndicator,
   Button,
   Card,
   Surface,
@@ -23,10 +19,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useErrorHandler } from "../hooks/useErrorHandler";
-import type { AppTabParamList } from "../navigation/MainNavigator";
-import type { Receipt, ReceiptStatus, UserBalance } from "../types";
+import type { AppTabParamList, HomeStackParamList } from "../navigation/MainNavigator";
+import type { Campaign, Receipt, ReceiptStatus, UserBalance } from "../types";
 import ReceiptStatusChip from "../components/ReceiptStatusChip";
 import { colors, spacing, borderRadius } from "../theme/colors";
+import { useActiveCampaigns, useCampaignNotifications } from "../hooks/useCampaignPromotions";
 
 const MAX_RECENT_RECEIPTS = 3;
 const RECEIPT_STATUSES: ReceiptStatus[] = [
@@ -37,6 +34,90 @@ const RECEIPT_STATUSES: ReceiptStatus[] = [
   "flagged",
   "error",
 ];
+
+const formatCampaignBonus = (campaign: Campaign): string => {
+  if (
+    typeof campaign.reward_amount === "number" &&
+    Number.isFinite(campaign.reward_amount) &&
+    campaign.reward_amount > 0
+  ) {
+    return `+${campaign.reward_amount.toFixed(2)} BTC$`;
+  }
+
+  if (
+    typeof campaign.multiplier === "number" &&
+    Number.isFinite(campaign.multiplier)
+  ) {
+    return `${campaign.multiplier.toFixed(2)}x rewards`;
+  }
+
+  return "Bonus available";
+};
+
+const formatCampaignExpiry = (campaign: Campaign): string => {
+  if (!campaign.end_date) {
+    return "Ongoing";
+  }
+
+  const endDate = new Date(campaign.end_date);
+  if (Number.isNaN(endDate.getTime())) {
+    return `Ends ${campaign.end_date}`;
+  }
+
+  const now = new Date();
+  const diffMs = endDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return "Ended";
+  }
+
+  if (diffDays === 0) {
+    return "Ends today";
+  }
+
+  if (diffDays === 1) {
+    return "Ends tomorrow";
+  }
+
+  return `Ends in ${diffDays} days`;
+};
+
+const formatCampaignProgress = (campaign: Campaign): string | null => {
+  const progress = campaign.progress;
+  if (!progress) {
+    return null;
+  }
+
+  if (
+    typeof progress.percentComplete === "number" &&
+    Number.isFinite(progress.percentComplete)
+  ) {
+    const value = progress.percentComplete > 1
+      ? progress.percentComplete
+      : progress.percentComplete * 100;
+    return `${Math.min(100, Math.round(value))}% complete`;
+  }
+
+  if (
+    typeof progress.receiptsSubmitted === "number" &&
+    typeof progress.receiptsRemaining === "number"
+  ) {
+    const total = progress.receiptsSubmitted + progress.receiptsRemaining;
+    if (total > 0) {
+      return `${progress.receiptsSubmitted}/${total} receipts used`;
+    }
+  }
+
+  if (
+    typeof progress.amountAwarded === "number" &&
+    typeof progress.amountRemaining === "number"
+  ) {
+    return `${progress.amountAwarded.toFixed(2)} BTC$ earned`;
+  }
+
+  return null;
+};
 
 type BalanceRow = Pick<UserBalance, "total_balance">;
 type RecentReceiptRow = Pick<
@@ -52,9 +133,11 @@ type RecentReceiptRow = Pick<
   | "receipt_date"
 >;
 
-type Props = BottomTabScreenProps<AppTabParamList, "Home">;
+type Props = NativeStackScreenProps<HomeStackParamList, "HomeMain">;
+type TabNavigation = BottomTabNavigationProp<AppTabParamList>;
 
 export default function HomeScreen({ navigation }: Props) {
+  const tabNavigation = navigation.getParent<TabNavigation>();
   const { session } = useAuth();
   const theme = useTheme();
   const { handleError } = useErrorHandler({ context: "Loading Home Data" });
@@ -62,6 +145,14 @@ export default function HomeScreen({ navigation }: Props) {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const {
+    campaigns,
+    loading: campaignsLoading,
+    refresh: refreshCampaigns,
+    hasCampaigns,
+  } = useActiveCampaigns();
+
+  useCampaignNotifications(campaigns);
 
   const loadData = useCallback(async () => {
     if (!session?.user) {
@@ -78,7 +169,7 @@ export default function HomeScreen({ navigation }: Props) {
         supabase
           .from("receipts")
           .select(
-            "id, created_at, store, total, status, extracted_fields, location, payment_method, receipt_date"
+            "id, created_at, store, total, status, extracted_fields, location, payment_method, receipt_date",
           )
           .eq("user_id", session.user.id)
           .in("status", RECEIPT_STATUSES)
@@ -112,7 +203,7 @@ export default function HomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       void loadData();
-    }, [loadData])
+    }, [loadData]),
   );
 
   const handleRefresh = useCallback(() => {
@@ -120,216 +211,278 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
     setRefreshing(true);
-    void loadData();
-  }, [loadData, refreshing]);
+    void Promise.all([loadData(), refreshCampaigns()]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [loadData, refreshCampaigns, refreshing]);
 
-  const dynamicStyles = StyleSheet.create({
-    container: {
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.lg,
-      gap: spacing.md,
-      paddingBottom: 100,
+  const dynamicStyles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          paddingHorizontal: spacing.md,
+          paddingTop: spacing.lg,
+          gap: spacing.md,
+          paddingBottom: 100,
+        },
+        balanceCardContainer: {
+          marginBottom: spacing.xs,
+        },
+        balanceCard: {
+          borderRadius: borderRadius.xl,
+          padding: spacing.xl,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.3,
+          shadowRadius: 16,
+          elevation: 8,
+          overflow: "hidden",
+        },
+        patternOverlay: {
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: "100%",
+          height: "100%",
+          opacity: 0.1,
+        },
+        balanceHeader: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: spacing.md,
+        },
+        balanceLabel: {
+          color: "rgba(255, 255, 255, 0.9)",
+          fontWeight: "500",
+          marginBottom: spacing.xs,
+        },
+        balanceAmount: {
+          color: theme.colors.onPrimary,
+          fontWeight: "800",
+          fontSize: 48,
+          lineHeight: 56,
+        },
+        balanceCurrency: {
+          color: "rgba(255, 255, 255, 0.9)",
+          fontWeight: "600",
+          marginTop: spacing.xs,
+        },
+        walletIconContainer: {
+          backgroundColor: "rgba(255, 255, 255, 0.2)",
+          borderRadius: borderRadius.lg,
+          overflow: "hidden",
+        },
+        walletIcon: {
+          margin: 0,
+        },
+        balanceSubtext: {
+          color: theme.colors.onPrimary,
+          marginBottom: spacing.lg,
+        },
+        quickActions: {
+          flexDirection: "row",
+          gap: spacing.md,
+        },
+        quickActionButton: {
+          flex: 1,
+          backgroundColor: "rgba(255, 255, 255, 0.15)",
+          borderRadius: borderRadius.md,
+          padding: spacing.sm,
+          alignItems: "center",
+          gap: spacing.xs,
+        },
+        quickActionText: {
+          color: theme.colors.onPrimary,
+          fontSize: 12,
+          fontWeight: "600",
+        },
+        campaignSection: {
+          gap: spacing.sm,
+        },
+        sectionHeader: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        sectionTitle: {
+          fontWeight: "700",
+          fontSize: 18,
+          color: colors.textPrimary,
+        },
+        campaignScroll: {
+          flexDirection: "row",
+          gap: spacing.md,
+        },
+        campaignCard: {
+          width: 260,
+          borderRadius: borderRadius.xl,
+          overflow: "hidden",
+        },
+        campaignGradient: {
+          padding: spacing.lg,
+          gap: spacing.sm,
+        },
+        campaignBrand: {
+          fontWeight: "600",
+          color: "rgba(255, 255, 255, 0.85)",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          fontSize: 12,
+        },
+        campaignName: {
+          fontWeight: "700",
+          color: "#FFFFFF",
+          fontSize: 20,
+          flexWrap: "wrap",
+        },
+        campaignMeta: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        campaignBonus: {
+          color: "#FFFFFF",
+          fontWeight: "700",
+        },
+        campaignExpiry: {
+          color: "rgba(255, 255, 255, 0.8)",
+          fontSize: 12,
+        },
+        campaignProgress: {
+          color: "rgba(255, 255, 255, 0.85)",
+          fontSize: 12,
+        },
+        campaignPlaceholder: {
+          borderRadius: borderRadius.lg,
+          padding: spacing.lg,
+          alignItems: "center",
+          justifyContent: "center",
+          gap: spacing.sm,
+          backgroundColor: colors.surfaceVariant,
+        },
+        campaignEmptyText: {
+          color: colors.textSecondary,
+          textAlign: "center",
+        },
+        campaignEmptyButton: {
+          alignSelf: "center",
+          marginTop: spacing.xs,
+        },
+        card: {
+          borderRadius: borderRadius.xl,
+          backgroundColor: colors.surface,
+        },
+        cardTitle: {
+          fontWeight: "700",
+          fontSize: 18,
+        },
+        emptyState: {
+          paddingVertical: spacing.xl,
+          alignItems: "center",
+          gap: spacing.md,
+        },
+        emptyIconContainer: {
+          backgroundColor: `${colors.primary}15`,
+          borderRadius: borderRadius.xl,
+          padding: spacing.md,
+        },
+        emptyTitle: {
+          fontWeight: "600",
+          color: colors.textPrimary,
+        },
+        emptySubtitle: {
+          color: colors.textSecondary,
+          textAlign: "center",
+          paddingHorizontal: spacing.lg,
+        },
+        emptyButton: {
+          marginTop: spacing.sm,
+          borderRadius: borderRadius.md,
+        },
+        receiptsList: {
+          gap: spacing.sm,
+        },
+        receiptItem: {
+          borderRadius: borderRadius.lg,
+          backgroundColor: colors.surfaceVariant,
+          overflow: "hidden",
+        },
+        receiptContent: {
+          flexDirection: "row",
+          alignItems: "center",
+          padding: spacing.md,
+          gap: spacing.md,
+        },
+        receiptIconContainer: {
+          borderRadius: borderRadius.md,
+          overflow: "hidden",
+        },
+        receiptIconGradient: {
+          width: 48,
+          height: 48,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        receiptInfo: {
+          flex: 1,
+          gap: spacing.xs,
+        },
+        receiptStore: {
+          fontWeight: "600",
+          color: colors.textPrimary,
+        },
+        receiptDetails: {
+          color: colors.textSecondary,
+          fontSize: 13,
+        },
+        viewAllButton: {
+          marginTop: spacing.sm,
+        },
+        fabWrapper: {
+          position: "absolute",
+          right: spacing.md,
+          bottom: spacing.lg * 2,
+        },
+        fabGradient: {
+          borderRadius: 28,
+          overflow: "hidden",
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 12,
+          elevation: 8,
+        },
+        fab: {
+          backgroundColor: "transparent",
+          margin: 0,
+          borderRadius: 28,
+        },
+      }),
+    [theme],
+  );
+
+  const handleNavigateToUpload = useCallback(() => {
+    tabNavigation?.navigate("Receipts", { screen: "UploadReceipt" });
+  }, [tabNavigation]);
+
+  const handleNavigateToReceipts = useCallback(
+    (receiptId?: string) => {
+      tabNavigation?.navigate("Receipts", {
+        screen: receiptId ? "ReceiptDetail" : "ReceiptList",
+        params: receiptId ? { receiptId } : undefined,
+      });
     },
-    balanceCardContainer: {
-      marginBottom: spacing.xs,
-    },
-    balanceCard: {
-      borderRadius: borderRadius.xl,
-      padding: spacing.xl,
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
-      elevation: 8,
-      overflow: "hidden",
-    },
-    patternOverlay: {
-      position: "absolute",
-      top: 0,
-      right: 0,
-      width: "100%",
-      height: "100%",
-      opacity: 0.1,
-    },
-    balanceHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: spacing.md,
-    },
-    balanceLabel: {
-      color: "rgba(255, 255, 255, 0.9)",
-      fontWeight: "500",
-      marginBottom: spacing.xs,
-    },
-    balanceAmount: {
-      color: theme.colors.onPrimary,
-      fontWeight: "800",
-      fontSize: 48,
-      lineHeight: 56,
-    },
-    balanceCurrency: {
-      color: "rgba(255, 255, 255, 0.9)",
-      fontWeight: "600",
-      marginTop: spacing.xs,
-    },
-    walletIconContainer: {
-      backgroundColor: "rgba(255, 255, 255, 0.2)",
-      borderRadius: borderRadius.lg,
-      overflow: "hidden",
-    },
-    walletIcon: {
-      margin: 0,
-    },
-    balanceSubtext: {
-      color: theme.colors.onPrimary,
-      marginBottom: spacing.lg,
-    },
-    quickActions: {
-      flexDirection: "row",
-      gap: spacing.md,
-    },
-    quickActionButton: {
-      flex: 1,
-      backgroundColor: "rgba(255, 255, 255, 0.15)",
-      borderRadius: borderRadius.md,
-      padding: spacing.sm,
-      alignItems: "center",
-      gap: spacing.xs,
-    },
-    quickActionText: {
-      color: theme.colors.onPrimary,
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    card: {
-      borderRadius: borderRadius.xl,
-      backgroundColor: colors.surface,
-    },
-    cardTitle: {
-      fontWeight: "700",
-      fontSize: 18,
-    },
-    emptyState: {
-      paddingVertical: spacing.xl,
-      alignItems: "center",
-      gap: spacing.md,
-    },
-    emptyIconContainer: {
-      backgroundColor: `${colors.primary}15`,
-      borderRadius: borderRadius.xl,
-      padding: spacing.md,
-    },
-    emptyTitle: {
-      fontWeight: "600",
-      color: colors.textPrimary,
-    },
-    emptySubtitle: {
-      color: colors.textSecondary,
-      textAlign: "center",
-      paddingHorizontal: spacing.lg,
-    },
-    emptyButton: {
-      marginTop: spacing.sm,
-      borderRadius: borderRadius.md,
-    },
-    receiptsList: {
-      gap: spacing.sm,
-    },
-    receiptItem: {
-      borderRadius: borderRadius.lg,
-      backgroundColor: colors.surfaceVariant,
-      overflow: "hidden",
-    },
-    receiptContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: spacing.md,
-      gap: spacing.md,
-    },
-    receiptIconContainer: {
-      borderRadius: borderRadius.md,
-      overflow: "hidden",
-    },
-    receiptIconGradient: {
-      width: 48,
-      height: 48,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    receiptInfo: {
-      flex: 1,
-      gap: spacing.xs,
-    },
-    receiptStore: {
-      fontWeight: "600",
-      color: colors.textPrimary,
-    },
-    receiptDetails: {
-      color: colors.textSecondary,
-      fontSize: 13,
-    },
-    viewAllButton: {
-      marginTop: spacing.sm,
-    },
-    referralGradient: {
-      borderRadius: borderRadius.xl,
-      padding: spacing.xl,
-    },
-    referralContent: {
-      gap: spacing.md,
-    },
-    referralIconContainer: {
-      alignSelf: "flex-start",
-      borderRadius: borderRadius.lg,
-      overflow: "hidden",
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    referralIconGradient: {
-      width: 56,
-      height: 56,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    referralText: {
-      gap: spacing.sm,
-    },
-    referralTitle: {
-      fontWeight: "700",
-      color: colors.textPrimary,
-    },
-    referralSubtitle: {
-      color: colors.textSecondary,
-      lineHeight: 20,
-    },
-    referralButton: {
-      borderRadius: borderRadius.md,
-      alignSelf: "flex-start",
-    },
-    fabWrapper: {
-      position: "absolute",
-      right: spacing.md,
-      bottom: spacing.lg * 2,
-    },
-    fabGradient: {
-      borderRadius: 28,
-      overflow: "hidden",
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 12,
-      elevation: 8,
-    },
-    fab: {
-      backgroundColor: "transparent",
-      margin: 0,
-      borderRadius: 28,
-    },
-  });
+    [tabNavigation],
+  );
+
+  const handleNavigateToWallet = useCallback(() => {
+    tabNavigation?.navigate("Wallet");
+  }, [tabNavigation]);
+
+  const handleNavigateToReferrals = useCallback(() => {
+    tabNavigation?.navigate("Profile", { screen: "Referral" });
+  }, [tabNavigation]);
 
   return (
     <>
@@ -384,9 +537,7 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={dynamicStyles.quickActions}>
               <Pressable
                 style={dynamicStyles.quickActionButton}
-                onPress={() =>
-                  navigation.navigate("Receipts", { screen: "UploadReceipt" })
-                }
+                onPress={handleNavigateToUpload}
               >
                 <IconButton
                   icon="upload"
@@ -399,7 +550,7 @@ export default function HomeScreen({ navigation }: Props) {
 
               <Pressable
                 style={dynamicStyles.quickActionButton}
-                onPress={() => navigation.navigate("Wallet")}
+                onPress={handleNavigateToWallet}
               >
                 <IconButton
                   icon="history"
@@ -412,9 +563,7 @@ export default function HomeScreen({ navigation }: Props) {
 
               <Pressable
                 style={dynamicStyles.quickActionButton}
-                onPress={() =>
-                  navigation.navigate("Profile", { screen: "Referral" })
-                }
+                onPress={handleNavigateToReferrals}
               >
                 <IconButton
                   icon="share-variant"
@@ -428,6 +577,95 @@ export default function HomeScreen({ navigation }: Props) {
           </LinearGradient>
         </View>
 
+        <View style={dynamicStyles.campaignSection}>
+          <View style={dynamicStyles.sectionHeader}>
+            <Text variant="titleLarge" style={dynamicStyles.sectionTitle}>
+              Active Campaigns
+            </Text>
+            <Button
+              mode="text"
+              compact
+              onPress={() => void refreshCampaigns()}
+            >
+              Refresh
+            </Button>
+          </View>
+
+          {campaignsLoading ? (
+            <Surface style={dynamicStyles.campaignPlaceholder} elevation={0}>
+              <ActivityIndicator animating color={theme.colors.primary} />
+              <Text style={dynamicStyles.campaignEmptyText}>
+                Checking for promotions…
+              </Text>
+            </Surface>
+          ) : hasCampaigns ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={dynamicStyles.campaignScroll}
+            >
+              {campaigns.map((campaign) => (
+                <Pressable
+                  key={campaign.id}
+                  style={dynamicStyles.campaignCard}
+                  onPress={() =>
+                    navigation.navigate("CampaignDetail", {
+                      campaignId: campaign.id,
+                      campaign,
+                    })
+                  }
+                >
+                  <LinearGradient
+                    colors={["#5C6BC0", "#26C6DA", "#43A047"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={dynamicStyles.campaignGradient}
+                  >
+                    <Text style={dynamicStyles.campaignBrand} numberOfLines={1}>
+                      {campaign.brand}
+                    </Text>
+                    <Text style={dynamicStyles.campaignName} numberOfLines={2}>
+                      {campaign.name ?? "Receipt bonus"}
+                    </Text>
+                    <View style={dynamicStyles.campaignMeta}>
+                      <Text style={dynamicStyles.campaignBonus}>
+                        {formatCampaignBonus(campaign)}
+                      </Text>
+                      <Text style={dynamicStyles.campaignExpiry}>
+                        {formatCampaignExpiry(campaign)}
+                      </Text>
+                    </View>
+                    {formatCampaignProgress(campaign) ? (
+                      <Text style={dynamicStyles.campaignProgress}>
+                        {formatCampaignProgress(campaign)}
+                      </Text>
+                    ) : null}
+                  </LinearGradient>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <Surface style={dynamicStyles.campaignPlaceholder} elevation={0}>
+              <IconButton
+                icon="bullhorn"
+                size={36}
+                iconColor={theme.colors.primary}
+              />
+              <Text style={dynamicStyles.campaignEmptyText}>
+                New promotions will appear here as soon as they launch.
+              </Text>
+              <Button
+                mode="contained"
+                compact
+                style={dynamicStyles.campaignEmptyButton}
+                onPress={handleNavigateToUpload}
+              >
+                Upload a receipt
+              </Button>
+            </Surface>
+          )}
+        </View>
+
         <Card style={dynamicStyles.card} elevation={2}>
           <Card.Title
             title="Recent Receipts"
@@ -437,9 +675,7 @@ export default function HomeScreen({ navigation }: Props) {
               <IconButton
                 {...props}
                 icon="chevron-right"
-                onPress={() =>
-                  navigation.navigate("Receipts", { screen: "ReceiptList" })
-                }
+                onPress={() => handleNavigateToReceipts()}
               />
             )}
           />
@@ -461,9 +697,7 @@ export default function HomeScreen({ navigation }: Props) {
                 </Text>
                 <Button
                   mode="contained"
-                  onPress={() =>
-                    navigation.navigate("Receipts", { screen: "UploadReceipt" })
-                  }
+                  onPress={handleNavigateToUpload}
                   style={dynamicStyles.emptyButton}
                   icon="camera-plus"
                 >
@@ -479,12 +713,7 @@ export default function HomeScreen({ navigation }: Props) {
                     elevation={0}
                   >
                     <Pressable
-                      onPress={() =>
-                        navigation.navigate("Receipts", {
-                          screen: "ReceiptDetail",
-                          params: { receiptId: receipt.id },
-                        })
-                      }
+                      onPress={() => handleNavigateToReceipts(receipt.id)}
                     >
                       <View style={dynamicStyles.receiptContent}>
                         <View style={dynamicStyles.receiptIconContainer}>
@@ -515,11 +744,11 @@ export default function HomeScreen({ navigation }: Props) {
                             variant="bodyMedium"
                             style={dynamicStyles.receiptDetails}
                           >
-                            ${receipt.total?.toFixed(2) ?? "--"} • {(
+                            ${receipt.total?.toFixed(2) ?? "--"} • {
                               receipt.receipt_date
                                 ? new Date(receipt.receipt_date).toLocaleDateString()
                                 : new Date(receipt.created_at).toLocaleDateString()
-                            )}
+                            }
                           </Text>
                         </View>
 
@@ -528,299 +757,27 @@ export default function HomeScreen({ navigation }: Props) {
                     </Pressable>
                   </Surface>
                 ))}
-                <Button
-                  mode="text"
-                  onPress={() =>
-                    navigation.navigate("Receipts", { screen: "ReceiptList" })
-                  }
-                  style={dynamicStyles.viewAllButton}
-                  icon="arrow-right"
-                  contentStyle={{ flexDirection: "row-reverse" }}
-                >
-                  View all receipts
-                </Button>
               </View>
             )}
           </Card.Content>
-        </Card>
-
-        <Card style={dynamicStyles.card} elevation={2}>
-          <LinearGradient
-            colors={["rgba(30, 136, 229, 0.05)", "rgba(0, 196, 140, 0.05)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={dynamicStyles.referralGradient}
-          >
-            <View style={dynamicStyles.referralContent}>
-              <View style={dynamicStyles.referralIconContainer}>
-                <LinearGradient
-                  colors={[colors.accent, colors.accentDark]}
-                  style={dynamicStyles.referralIconGradient}
-                >
-                  <IconButton
-                    icon="account-multiple"
-                    size={28}
-                    iconColor="#FFFFFF"
-                    style={{ margin: 0 }}
-                  />
-                </LinearGradient>
-              </View>
-
-              <View style={dynamicStyles.referralText}>
-                <Text variant="titleLarge" style={dynamicStyles.referralTitle}>
-                  Earn More with Referrals
-                </Text>
-                <Text
-                  variant="bodyMedium"
-                  style={dynamicStyles.referralSubtitle}
-                >
-                  Share your code and earn bonus BTC$ when friends join
-                </Text>
-              </View>
-
-              <Button
-                mode="contained"
-                onPress={() =>
-                  navigation.navigate("Profile", { screen: "Referral" })
-                }
-                style={dynamicStyles.referralButton}
-                icon="arrow-right"
-                contentStyle={{ flexDirection: "row-reverse" }}
-              >
-                Get Started
-              </Button>
-            </View>
-          </LinearGradient>
         </Card>
       </ScrollView>
 
       <View style={dynamicStyles.fabWrapper}>
         <LinearGradient
-          colors={[colors.primary, colors.accent]}
+          colors={["#1E88E5", "#00BCD4"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={dynamicStyles.fabGradient}
         >
           <FAB
-            icon="camera-plus"
+            icon="camera"
             style={dynamicStyles.fab}
-            onPress={() =>
-              navigation.navigate("Receipts", { screen: "UploadReceipt" })
-            }
-            label="Upload"
             color="#FFFFFF"
-            customSize={56}
+            onPress={handleNavigateToUpload}
           />
         </LinearGradient>
       </View>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
-    paddingBottom: 100,
-  },
-  balanceCardContainer: {
-    marginBottom: spacing.xs,
-  },
-  balanceCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-    overflow: "hidden",
-  },
-  patternOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: "100%",
-    height: "100%",
-    opacity: 0.1,
-  },
-  balanceHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: spacing.md,
-  },
-  balanceLabel: {
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500",
-    marginBottom: spacing.xs,
-  },
-  balanceAmount: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 48,
-    lineHeight: 56,
-  },
-  balanceCurrency: {
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "600",
-    marginTop: spacing.xs,
-  },
-  walletIconContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: borderRadius.lg,
-    overflow: "hidden",
-  },
-  walletIcon: {
-    margin: 0,
-  },
-  balanceSubtext: {
-    color: "#FFFFFF",
-    marginBottom: spacing.lg,
-  },
-  quickActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  quickActionButton: {
-    flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  quickActionText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  card: {
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.surface,
-  },
-  cardTitle: {
-    fontWeight: "700",
-    fontSize: 18,
-  },
-  emptyState: {
-    paddingVertical: spacing.xl,
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  emptyIconContainer: {
-    backgroundColor: `${colors.primary}15`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-  },
-  emptyTitle: {
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    textAlign: "center",
-    paddingHorizontal: spacing.lg,
-  },
-  emptyButton: {
-    marginTop: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  receiptsList: {
-    gap: spacing.sm,
-  },
-  receiptItem: {
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surfaceVariant,
-    overflow: "hidden",
-  },
-  receiptContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  receiptIconContainer: {
-    borderRadius: borderRadius.md,
-    overflow: "hidden",
-  },
-  receiptIconGradient: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  receiptInfo: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  receiptStore: {
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
-  receiptDetails: {
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  viewAllButton: {
-    marginTop: spacing.sm,
-  },
-  referralGradient: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-  },
-  referralContent: {
-    gap: spacing.md,
-  },
-  referralIconContainer: {
-    alignSelf: "flex-start",
-    borderRadius: borderRadius.lg,
-    overflow: "hidden",
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  referralIconGradient: {
-    width: 56,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  referralText: {
-    gap: spacing.sm,
-  },
-  referralTitle: {
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
-  referralSubtitle: {
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  referralButton: {
-    borderRadius: borderRadius.md,
-    alignSelf: "flex-start",
-  },
-  fabWrapper: {
-    position: "absolute",
-    right: spacing.md,
-    bottom: spacing.lg * 2,
-  },
-  fabGradient: {
-    borderRadius: 28,
-    overflow: "hidden",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fab: {
-    backgroundColor: "transparent",
-    margin: 0,
-    borderRadius: 28,
-  },
-});
