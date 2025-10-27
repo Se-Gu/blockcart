@@ -6,10 +6,20 @@ import { ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -20,8 +30,16 @@ import {
 } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 
-import type { CampaignRuleFormState, CampaignRuleTemplate, CampaignGenderOption } from "@/lib/campaign-rules";
-import { CAMPAIGN_RULE_TEMPLATES, DEFAULT_GENDER_OPTIONS, cloneRuleFormState } from "@/lib/campaign-rules";
+import type {
+  CampaignRuleFormState,
+  CampaignRuleTemplate,
+  CampaignGenderOption,
+} from "@/lib/campaign-rules";
+import {
+  CAMPAIGN_RULE_TEMPLATES,
+  DEFAULT_GENDER_OPTIONS,
+  cloneRuleFormState,
+} from "@/lib/campaign-rules";
 import type { CampaignRulePreviewResult } from "@/hooks/use-campaign-rule-preview";
 import { cn } from "@/lib/utils";
 
@@ -94,7 +112,10 @@ function StoreMultiSelect({
                     }}
                   >
                     <Check
-                      className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")}
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
                     />
                     {option}
                   </CommandItem>
@@ -152,7 +173,9 @@ function TemplateSelector({
                   className="flex flex-col items-start gap-1"
                 >
                   <span className="text-sm font-medium">{template.name}</span>
-                  <span className="text-xs text-muted-foreground">{template.description}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {template.description}
+                  </span>
                   {template.recommendedMultiplier ? (
                     <span className="text-[10px] uppercase text-muted-foreground">
                       Suggested multiplier: x{template.recommendedMultiplier}
@@ -233,7 +256,8 @@ export function CampaignRuleBuilder({
     onCommit?.();
   };
 
-  const alignment = layout === "inline" ? "grid grid-cols-1 gap-4" : "space-y-4";
+  const alignment =
+    layout === "inline" ? "grid grid-cols-1 gap-4" : "space-y-4";
 
   return (
     <div className={alignment}>
@@ -247,7 +271,11 @@ export function CampaignRuleBuilder({
               updated.rewardType = next as CampaignRuleFormState["rewardType"];
               if (next === "multiplier") {
                 updated.rewardValue = "";
-                updated.referral = { ...updated.referral, required: false, bonusAmount: "" };
+                updated.referral = {
+                  ...updated.referral,
+                  required: false,
+                  bonusAmount: "",
+                };
               }
               if (next === "fixed_bonus") {
                 updated.referral = { ...updated.referral, required: false };
@@ -288,7 +316,8 @@ export function CampaignRuleBuilder({
           />
         </div>
 
-        {(form.rewardType === "fixed_bonus" || form.rewardType === "referral_boost") && (
+        {(form.rewardType === "fixed_bonus" ||
+          form.rewardType === "referral_boost") && (
           <div className="space-y-1">
             <Label htmlFor="reward-value">Reward value</Label>
             <Input
@@ -303,7 +332,11 @@ export function CampaignRuleBuilder({
                 onChange(updated);
               }}
               onBlur={onCommit}
-              placeholder={form.rewardType === "fixed_bonus" ? "Bonus amount" : "Referral bonus"}
+              placeholder={
+                form.rewardType === "fixed_bonus"
+                  ? "Bonus amount"
+                  : "Referral bonus"
+              }
             />
           </div>
         )}
@@ -476,7 +509,10 @@ export function CampaignRuleBuilder({
                   onCommit?.();
                 }}
               />
-              <Label htmlFor="referral-required" className="text-xs font-normal">
+              <Label
+                htmlFor="referral-required"
+                className="text-xs font-normal"
+              >
                 Referral must exist
               </Label>
             </div>
@@ -506,19 +542,25 @@ export function CampaignRuleBuilder({
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">Eligibility preview</span>
+          <span className="font-medium text-foreground">
+            Eligibility preview
+          </span>
           {previewLoading ? <span>Calculating…</span> : null}
         </div>
         {preview ? (
           <div className="flex flex-wrap gap-3">
             <span>
-              <span className="font-medium text-foreground">{preview.eligible_users}</span>
-              {" "/}eligible users
+              <span className="font-medium text-foreground">
+                {preview.eligible_users}
+              </span>{" "}
+              eligible users
               {preview.total_users ? ` of ${preview.total_users}` : ""}
             </span>
             <span>
-              <span className="font-medium text-foreground">{preview.eligible_receipts}</span>
-              {" "/}eligible receipts
+              <span className="font-medium text-foreground">
+                {preview.eligible_receipts}
+              </span>{" "}
+              eligible receipts
               {preview.total_receipts ? ` of ${preview.total_receipts}` : ""}
             </span>
           </div>
