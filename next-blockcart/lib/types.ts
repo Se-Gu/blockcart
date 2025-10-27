@@ -114,11 +114,36 @@ export interface ReviewerNotification {
   };
 }
 
+export type CampaignRewardType = "multiplier" | "fixed_bonus" | "referral_boost";
+
+export interface CampaignRule {
+  version?: number | null;
+  reward_type?: CampaignRewardType;
+  reward_value?: number | null;
+  min_spend?: number | null;
+  eligible_stores?: string[];
+  multiplier_overrides?: {
+    double_base?: boolean;
+    stack_with_existing?: boolean;
+  } | null;
+  demographics?: {
+    age_min?: number | null;
+    age_max?: number | null;
+    genders?: string[];
+    kyc_verified?: boolean;
+  } | null;
+  referral?: {
+    required?: boolean;
+    bonus_amount?: number | null;
+  } | null;
+  [key: string]: unknown;
+}
+
 export interface Campaign {
   id: string;
   brand: string;
   multiplier: number;
-  rule_json: Record<string, unknown> | null;
+  rule_json: CampaignRule | null;
   start_date: string | null;
   end_date: string | null;
   updated_at: string | null;
