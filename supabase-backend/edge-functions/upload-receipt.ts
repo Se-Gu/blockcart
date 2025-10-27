@@ -381,12 +381,21 @@ serve(async (req) => {
           reviewer: { email: nextReviewer.email },
         };
 
+        const storeName = receipt.store && receipt.store.trim().length > 0 
+          ? receipt.store.trim() 
+          : "Unknown Store";
+        const receiptTotal = receipt.total 
+          ? `$${Number(receipt.total).toFixed(2)}` 
+          : "amount unknown";
+        
         const { error: notificationErr } = await supabase
           .from("reviewer_notifications")
           .insert({
             reviewer_id: nextReviewer.id,
             receipt_id: receipt.id,
             assignment_id: insertedAssignment.id,
+            title: "New Receipt Assignment",
+            message: `You have been assigned a new receipt from ${storeName} (${receiptTotal}) to review.`,
             metadata: emailMetadata,
           });
 
