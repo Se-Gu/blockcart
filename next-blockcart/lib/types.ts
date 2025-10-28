@@ -162,6 +162,7 @@ export interface Reward {
   user_id: string;
   user_email: string;
   user_name: string;
+  user_wallet_address?: string | null;
   campaign_id: string;
   campaign_name: string;
   amount: number;

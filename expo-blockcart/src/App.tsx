@@ -1,6 +1,7 @@
 "use client"
 
 import "react-native-gesture-handler"
+import "./polyfills"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { AppState, type AppStateStatus, Platform, useColorScheme } from "react-native"
 import {
