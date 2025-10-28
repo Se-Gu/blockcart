@@ -3,6 +3,7 @@
     "name": "expo-blockcart",
     "slug": "expo-blockcart",
     "version": "1.0.0",
+    "scheme": "blockcart",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

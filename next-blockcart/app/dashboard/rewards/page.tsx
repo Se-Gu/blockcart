@@ -60,6 +60,7 @@ type SupabaseRewardRow = {
   users?: {
     id: string;
     email?: string | null;
+    wallet_address?: string | null;
   } | null;
   campaigns?: {
     id: string;
@@ -82,6 +83,7 @@ const mapRewardRow = (row: SupabaseRewardRow): Reward => {
     user_id: row.user_id ?? "",
     user_email: row.users?.email ?? "Unknown user",
     user_name: row.users?.email ?? "Unknown user",
+    user_wallet_address: row.users?.wallet_address ?? null,
     campaign_id: row.campaign_id ?? "",
     campaign_name:
       row.campaigns?.name ??
@@ -162,7 +164,8 @@ export default function RewardsPage() {
         *,
         users:user_id (
           id,
-          email
+          email,
+          wallet_address
         ),
         campaigns:campaign_id (
           id,
@@ -203,7 +206,10 @@ export default function RewardsPage() {
         query.length === 0 ||
         reward.user_name.toLowerCase().includes(query) ||
         reward.user_email.toLowerCase().includes(query) ||
-        reward.campaign_name.toLowerCase().includes(query);
+        reward.campaign_name.toLowerCase().includes(query) ||
+        (reward.user_wallet_address ?? "")
+          .toLowerCase()
+          .includes(query);
 
       const matchesStatus =
         statusFilter === "all" || reward.status === statusFilter;
@@ -317,6 +323,20 @@ export default function RewardsPage() {
   };
 
   const handleMarkPaid = async (rewardId: string) => {
+    const rewardRecord = rewards.find((reward) => reward.id === rewardId);
+    if (!rewardRecord) {
+      return;
+    }
+    if (!rewardRecord.user_wallet_address) {
+      toast({
+        variant: "destructive",
+        title: "Wallet required",
+        description:
+          "Add a wallet address for this user before marking the reward as paid.",
+      });
+      return;
+    }
+
     setActionLoadingIds((prev) => {
       const updated = new Set(prev);
       updated.add(rewardId);
@@ -408,6 +428,21 @@ export default function RewardsPage() {
     const rewardIds = Array.from(selectedRewards);
     if (rewardIds.length === 0) return;
 
+    const missingWallets = rewardIds.filter((rewardId) => {
+      const reward = rewards.find((item) => item.id === rewardId);
+      return !reward?.user_wallet_address;
+    });
+
+    if (missingWallets.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Wallet required",
+        description:
+          "Bulk payouts require every selected user to have a wallet address on file.",
+      });
+      return;
+    }
+
     setBulkProcessing("paid");
     try {
       const supabase = getSupabaseBrowserClient();
@@ -466,6 +501,7 @@ export default function RewardsPage() {
       "Reward ID",
       "User",
       "User Email",
+      "Wallet Address",
       "Campaign",
       "Amount",
       "Status",
@@ -477,6 +513,7 @@ export default function RewardsPage() {
       escapeValue(reward.id),
       escapeValue(reward.user_name),
       escapeValue(reward.user_email),
+      escapeValue(reward.user_wallet_address ?? ""),
       escapeValue(reward.campaign_name),
       escapeValue(reward.amount.toFixed(2)),
       escapeValue(reward.status),
@@ -811,6 +848,15 @@ export default function RewardsPage() {
                         <p className="text-xs text-muted-foreground">
                           {reward.user_email}
                         </p>
+                        {reward.user_wallet_address ? (
+                          <p className="mt-1 text-xs font-mono text-muted-foreground break-all">
+                            {reward.user_wallet_address}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-destructive">
+                            Wallet missing
+                          </p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
@@ -846,7 +892,14 @@ export default function RewardsPage() {
                           <Button
                             size="sm"
                             onClick={() => handleMarkPaid(reward.id)}
-                            disabled={isRowProcessing}
+                            disabled={
+                              isRowProcessing || !reward.user_wallet_address
+                            }
+                            title={
+                              reward.user_wallet_address
+                                ? undefined
+                                : "Add a wallet address before marking as paid"
+                            }
                           >
                             {isRowProcessing ? (
                               <>

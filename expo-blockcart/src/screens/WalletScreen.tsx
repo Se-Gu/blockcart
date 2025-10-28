@@ -1,13 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import {
-  Alert,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -93,7 +87,7 @@ type BalanceRow = Pick<UserBalance, "total_balance">;
 
 type Props = BottomTabScreenProps<AppTabParamList, "Wallet">;
 
-export default function WalletScreen(_props: Props) {
+export default function WalletScreen({ navigation }: Props) {
   const { session } = useAuth();
   const theme = useTheme();
   const { handleError } = useErrorHandler({ context: "Wallet" });
@@ -101,6 +95,7 @@ export default function WalletScreen(_props: Props) {
   const [transactions, setTransactions] = useState<RewardRowWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   const loadWallet = useCallback(async () => {
     if (!session?.user) {
@@ -108,7 +103,7 @@ export default function WalletScreen(_props: Props) {
     }
     setLoading(true);
     try {
-      const [balanceResponse, rewardsResponse] = await Promise.all([
+      const [balanceResponse, rewardsResponse, profileResponse] = await Promise.all([
         supabase
           .from("user_balances")
           .select("total_balance")
@@ -122,6 +117,11 @@ export default function WalletScreen(_props: Props) {
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false })
           .limit(TRANSACTION_LIMIT),
+        supabase
+          .from("users")
+          .select("wallet_address")
+          .eq("id", session.user.id)
+          .maybeSingle(),
       ]);
 
       if (balanceResponse.error) {
@@ -129,6 +129,9 @@ export default function WalletScreen(_props: Props) {
       }
       if (rewardsResponse.error) {
         throw rewardsResponse.error;
+      }
+      if (profileResponse.error) {
+        throw profileResponse.error;
       }
 
       const balanceData = balanceResponse.data as BalanceRow | null;
@@ -158,6 +161,12 @@ export default function WalletScreen(_props: Props) {
 
       setTotalBalance(balanceData?.total_balance ?? 0);
       setTransactions(normalizedRewards);
+      const profileData = profileResponse.data as { wallet_address?: string | null } | null;
+      setWalletAddress(
+        profileData?.wallet_address && typeof profileData.wallet_address === "string"
+          ? profileData.wallet_address
+          : null,
+      );
     } catch (err) {
       handleError(err, "Loading wallet");
     } finally {
@@ -204,6 +213,10 @@ export default function WalletScreen(_props: Props) {
     balanceAmount: {
       color: theme.colors.onPrimary,
       fontWeight: "700",
+    },
+    balanceSubtext: {
+      color: theme.colors.onPrimary,
+      opacity: 0.85,
     },
     connectButton: {
       marginTop: spacing.md,
@@ -271,16 +284,21 @@ export default function WalletScreen(_props: Props) {
         <Text variant="displayMedium" style={dynamicStyles.balanceAmount}>
           {totalBalance?.toFixed(2) ?? "0.00"} BTC$
         </Text>
+        <Text variant="bodyMedium" style={dynamicStyles.balanceSubtext}>
+          {walletAddress
+            ? "Payouts will be routed to your connected Solana wallet."
+            : "Add a Solana wallet to withdraw your BTC$ rewards."}
+        </Text>
         <Button
           mode="contained-tonal"
           style={dynamicStyles.connectButton}
           buttonColor="rgba(255, 255, 255, 0.2)"
           textColor={theme.colors.onPrimary}
           onPress={() =>
-            Alert.alert("Coming soon", "Wallet connection is on the roadmap.")
+            navigation.navigate("Profile", { screen: "ProfileMain" })
           }
         >
-          Connect Wallet
+          {walletAddress ? "Manage wallet" : "Connect wallet"}
         </Button>
       </LinearGradient>
 
@@ -317,6 +335,18 @@ export default function WalletScreen(_props: Props) {
               >
                 Upload receipts to start earning BTC$
               </Text>
+              {!walletAddress ? (
+                <Text
+                  variant="bodySmall"
+                  style={{
+                    color: theme.colors.outline,
+                    textAlign: "center",
+                    marginTop: spacing.xs,
+                  }}
+                >
+                  Connect your wallet in Profile to receive payouts automatically.
+                </Text>
+              ) : null}
             </View>
           ) : (
             transactions.map((reward) => (
