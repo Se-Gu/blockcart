@@ -104,6 +104,20 @@ CREATE TABLE public.referrals (
   CONSTRAINT referrals_referrer_fkey FOREIGN KEY (referrer) REFERENCES public.users(id),
   CONSTRAINT referrals_referee_fkey FOREIGN KEY (referee) REFERENCES public.users(id)
 );
+CREATE TABLE public.review_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  receipt_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'unread'::text CHECK (status = ANY (ARRAY['unread'::text, 'read'::text])),
+  title text NOT NULL,
+  message text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  read_at timestamp with time zone,
+  CONSTRAINT review_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT review_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT review_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id)
+);
 CREATE TABLE public.reviewer_notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   reviewer_id uuid NOT NULL,
@@ -112,6 +126,9 @@ CREATE TABLE public.reviewer_notifications (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   read_at timestamp with time zone,
+  title text NOT NULL DEFAULT 'New Receipt Assignment'::text,
+  message text NOT NULL DEFAULT 'You have been assigned a new receipt to review.'::text,
+  status text NOT NULL DEFAULT 'unread'::text CHECK (status = ANY (ARRAY['unread'::text, 'read'::text])),
   CONSTRAINT reviewer_notifications_pkey PRIMARY KEY (id),
   CONSTRAINT reviewer_notifications_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.web_users(id),
   CONSTRAINT reviewer_notifications_receipt_id_fkey FOREIGN KEY (receipt_id) REFERENCES public.receipts(id),

@@ -1,66 +1,65 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  View,
-  ScrollView,
-} from "react-native";
-import { Text, TextInput, Button, Surface, useTheme } from "react-native-paper";
-import { LinearGradient } from "expo-linear-gradient";
-import { supabase } from "../lib/supabase";
-import { parseError } from "../lib/errorParser";
-import { useToast } from "../components/ToastProvider";
-import { colors, spacing, borderRadius } from "../theme/colors";
+import { useState } from "react"
+import { KeyboardAvoidingView, Platform, StyleSheet, View, ScrollView } from "react-native"
+import { Text, TextInput, Button, Surface, useTheme } from "react-native-paper"
+import { LinearGradient } from "expo-linear-gradient"
+import { supabase } from "../lib/supabase"
+import { parseError } from "../lib/errorParser"
+import { useToast } from "../components/ToastProvider"
+import { colors, spacing, borderRadius } from "../theme/colors"
 
 export default function LoginScreen() {
-  const theme = useTheme();
-  const { showError } = useToast();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const theme = useTheme()
+  const { showError } = useToast()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [isRegisterMode, setIsRegisterMode] = useState(false)
+
+  const isDark = theme.dark
+  const inputBackgroundColor = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)"
+  const inputTextColor = theme.colors.onSurface
+  const inputOutlineColor = isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"
+  const inputPlaceholderColor = theme.colors.onSurfaceVariant
+  const switchButtonColor = isDark ? "rgba(255, 255, 255, 0.8)" : theme.colors.primary
 
   const handleSubmit = async () => {
     if (!email || !password) {
-      showError("Email and password are required.");
-      return;
+      showError("Email and password are required.")
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
       if (isRegisterMode) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-        });
+        })
         if (error) {
-          throw error;
+          throw error
         }
         if (!data.session) {
-          showError(
-            "Please check your inbox to confirm your email before logging in."
-          );
+          showError("Please check your inbox to confirm your email before logging in.")
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
-        });
+        })
         if (error) {
-          throw error;
+          throw error
         }
       }
     } catch (error) {
-      const parsedError = parseError(error);
-      console.error("Auth error:", error);
-      showError(parsedError.message);
+      const parsedError = parseError(error)
+      console.error("Auth error:", error)
+      showError(parsedError.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const dynamicStyles = StyleSheet.create({
     container: {
@@ -151,7 +150,7 @@ export default function LoginScreen() {
       width: "100%",
     },
     input: {
-      backgroundColor: "rgba(255, 255, 255, 0.05)",
+      backgroundColor: inputBackgroundColor, // Now theme-aware
     },
     buttonGradient: {
       borderRadius: borderRadius.md,
@@ -175,15 +174,11 @@ export default function LoginScreen() {
     switchButton: {
       marginTop: spacing.xs,
     },
-  });
+  })
 
   return (
     <LinearGradient
-      colors={[
-        theme.colors.surface,
-        theme.colors.surfaceVariant,
-        theme.colors.background,
-      ]}
+      colors={[theme.colors.surface, theme.colors.surfaceVariant, theme.colors.background]}
       locations={[0, 0.5, 1]}
       style={dynamicStyles.container}
     >
@@ -238,14 +233,14 @@ export default function LoginScreen() {
                     autoCapitalize="none"
                     autoComplete="email"
                     mode="outlined"
-                    outlineColor="rgba(255, 255, 255, 0.2)"
+                    outlineColor={inputOutlineColor}
                     activeOutlineColor={colors.primary}
-                    textColor="#FFFFFF"
+                    textColor={inputTextColor}
                     style={dynamicStyles.input}
                     theme={{
                       colors: {
-                        onSurfaceVariant: "rgba(255, 255, 255, 0.6)",
-                        placeholder: "rgba(255, 255, 255, 0.5)",
+                        onSurfaceVariant: inputPlaceholderColor,
+                        placeholder: inputPlaceholderColor,
                       },
                     }}
                   />
@@ -258,14 +253,14 @@ export default function LoginScreen() {
                     secureTextEntry
                     autoCapitalize="none"
                     mode="outlined"
-                    outlineColor="rgba(255, 255, 255, 0.2)"
+                    outlineColor={inputOutlineColor}
                     activeOutlineColor={colors.primary}
-                    textColor="#FFFFFF"
+                    textColor={inputTextColor}
                     style={dynamicStyles.input}
                     theme={{
                       colors: {
-                        onSurfaceVariant: "rgba(255, 255, 255, 0.6)",
-                        placeholder: "rgba(255, 255, 255, 0.5)",
+                        onSurfaceVariant: inputPlaceholderColor,
+                        placeholder: inputPlaceholderColor,
                       },
                     }}
                   />
@@ -295,12 +290,10 @@ export default function LoginScreen() {
                   mode="text"
                   onPress={() => setIsRegisterMode((prev) => !prev)}
                   disabled={loading}
-                  textColor="rgba(255, 255, 255, 0.8)"
+                  textColor={switchButtonColor}
                   style={dynamicStyles.switchButton}
                 >
-                  {isRegisterMode
-                    ? "Already have an account? Sign in"
-                    : "New here? Create an account"}
+                  {isRegisterMode ? "Already have an account? Sign in" : "New here? Create an account"}
                 </Button>
               </View>
             </LinearGradient>
@@ -308,6 +301,5 @@ export default function LoginScreen() {
         </KeyboardAvoidingView>
       </ScrollView>
     </LinearGradient>
-  );
+  )
 }
-

@@ -1,13 +1,4 @@
-import {
-  Receipt,
-  Users,
-  CheckCircle,
-  XCircle,
-  DollarSign,
-  UserCheck,
-  Trophy,
-  Megaphone,
-} from "lucide-react"
+import { Receipt, Users, CheckCircle, XCircle, DollarSign, UserCheck, Trophy, Megaphone } from "lucide-react"
 import { StatCard } from "@/components/stat-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -51,31 +42,20 @@ export async function StatsSection({ role }: StatsSectionProps) {
   let referralBonusTotal = 0
 
   if (role === "admin") {
-    ;[
-      receiptStats,
-      rewardStats,
-      activeUsers,
-      topCampaigns,
-      activeCampaigns,
-      totalUsers,
-      referralBonusTotal,
-    ] = await Promise.all([
-      receiptStatsPromise,
-      fetchRewardStats(supabase),
-      fetchActiveUsers(supabase),
-      fetchTopCampaigns(supabase),
-      fetchActiveCampaignCount(supabase),
-      fetchTotalUsers(supabase),
-      fetchReferralBonusTotal(supabase),
-    ])
+    ;[receiptStats, rewardStats, activeUsers, topCampaigns, activeCampaigns, totalUsers, referralBonusTotal] =
+      await Promise.all([
+        receiptStatsPromise,
+        fetchRewardStats(supabase),
+        fetchActiveUsers(supabase),
+        fetchTopCampaigns(supabase),
+        fetchActiveCampaignCount(supabase),
+        fetchTotalUsers(supabase),
+        fetchReferralBonusTotal(supabase),
+      ])
   }
 
-  const approvalRate = receiptStats.total
-    ? ((receiptStats.approved / receiptStats.total) * 100).toFixed(1)
-    : "0.0"
-  const rejectionRate = receiptStats.total
-    ? ((receiptStats.rejected / receiptStats.total) * 100).toFixed(1)
-    : "0.0"
+  const approvalRate = receiptStats.total ? ((receiptStats.approved / receiptStats.total) * 100).toFixed(1) : "0.0"
+  const rejectionRate = receiptStats.total ? ((receiptStats.rejected / receiptStats.total) * 100).toFixed(1) : "0.0"
 
   // Prepare action cards array outside the render to avoid JS expression in JSX error
   const actionCards =
@@ -107,11 +87,11 @@ export async function StatsSection({ role }: StatsSectionProps) {
         ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div
         className={cn(
           "grid gap-4 md:grid-cols-2",
-          role === "admin" ? "lg:grid-cols-4 xl:grid-cols-5" : "lg:grid-cols-2"
+          role === "admin" ? "lg:grid-cols-4 xl:grid-cols-5" : "lg:grid-cols-2",
         )}
       >
         <StatCard
@@ -128,18 +108,8 @@ export async function StatsSection({ role }: StatsSectionProps) {
         />
         {role === "admin" && (
           <>
-            <StatCard
-              title="Total Users"
-              value={totalUsers}
-              icon={Users}
-              trend={{ value: 0, isPositive: true }}
-            />
-            <StatCard
-              title="Active Users"
-              value={activeUsers}
-              icon={UserCheck}
-              description="Last 30 days"
-            />
+            <StatCard title="Total Users" value={totalUsers} icon={Users} trend={{ value: 0, isPositive: true }} />
+            <StatCard title="Active Users" value={activeUsers} icon={UserCheck} description="Last 30 days" />
             <StatCard
               title="Active Campaigns"
               value={activeCampaigns}
@@ -152,16 +122,13 @@ export async function StatsSection({ role }: StatsSectionProps) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {actionCards.map((action) => (
-          <Card key={action.title} className="flex flex-col justify-between">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">{action.title}</CardTitle>
+          <Card key={action.title} className="flex flex-col justify-between transition-shadow hover:shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold">{action.title}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
               <p>{action.description}</p>
-              <Button
-                asChild
-                variant={action.buttonVariant ?? "default"}
-              >
+              <Button asChild variant={action.buttonVariant ?? "default"} className="w-full">
                 <Link href={action.href}>{action.buttonLabel}</Link>
               </Button>
             </CardContent>
@@ -169,12 +136,7 @@ export async function StatsSection({ role }: StatsSectionProps) {
         ))}
       </div>
 
-      <div
-        className={cn(
-          "grid gap-4 md:grid-cols-2",
-          role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-2"
-        )}
-      >
+      <div className={cn("grid gap-4 md:grid-cols-2", role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-2")}>
         <StatCard
           title="Approved"
           value={receiptStats.approved}
@@ -206,56 +168,57 @@ export async function StatsSection({ role }: StatsSectionProps) {
       </div>
 
       {role === "admin" && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Trophy className="h-4 w-4" /> Top Campaigns
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <Trophy className="h-4 w-4 text-primary" />
+                </div>
+                Top Campaigns
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {topCampaigns.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No campaign performance data available.</p>
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  No campaign performance data available.
+                </p>
               ) : (
                 topCampaigns.map((campaign, index) => {
                   const participantCopy = campaign.maxParticipants
-                    ? `${Math.round(
-                        Math.min(Math.max((campaign.saturationRatio ?? 0) * 100, 0), 100)
-                      )}% capacity`
-                    : "Open";
+                    ? `${Math.round(Math.min(Math.max((campaign.saturationRatio ?? 0) * 100, 0), 100))}% capacity`
+                    : "Open"
 
                   return (
                     <div
                       key={campaign.id ?? `campaign-${index}`}
-                      className="flex items-center justify-between gap-4 text-sm"
+                      className="flex items-center justify-between gap-4 rounded-lg border border-border/50 bg-muted/30 p-4 text-sm transition-colors hover:bg-muted/50"
                     >
-                      <div className="space-y-1">
-                        <div className="font-medium leading-none">{campaign.name}</div>
+                      <div className="space-y-1.5">
+                        <div className="font-semibold leading-none">{campaign.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {campaign.rewardCount} payouts · {campaign.paidCount} redeemed · {participantCopy}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium leading-none">
-                          {formatCurrency(campaign.totalRewards)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="font-semibold leading-none">{formatCurrency(campaign.totalRewards)}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
                           {formatCurrency(campaign.paidRewards)} paid
                         </div>
                       </div>
                     </div>
-                  );
+                  )
                 })
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Referral Bonuses</CardTitle>
+          <Card className="transition-shadow hover:shadow-md">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold">Referral Bonuses</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{formatCurrency(referralBonusTotal)}</div>
-              <p className="text-sm text-muted-foreground">Total bonuses awarded through referrals</p>
+            <CardContent className="space-y-3">
+              <div className="text-4xl font-bold tracking-tight">{formatCurrency(referralBonusTotal)}</div>
+              <p className="text-sm leading-relaxed text-muted-foreground">Total bonuses awarded through referrals</p>
             </CardContent>
           </Card>
         </div>

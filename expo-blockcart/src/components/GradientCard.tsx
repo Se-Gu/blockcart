@@ -1,33 +1,35 @@
-import type React from "react";
-import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet } from "react-native";
-import { colors, spacing, borderRadius } from "../theme/colors";
+import type React from "react"
+import { LinearGradient } from "expo-linear-gradient"
+import { StyleSheet } from "react-native"
+import { colors, spacing, borderRadius, elevation } from "../theme/colors"
 
 type GradientCardProps = {
-  children: React.ReactNode;
-};
+  children: React.ReactNode
+  variant?: "primary" | "accent" | "subtle"
+}
 
-export default function GradientCard({ children }: GradientCardProps) {
+export default function GradientCard({ children, variant = "primary" }: GradientCardProps) {
+  const gradientColors = {
+    primary: [colors.gradientStart, colors.gradientMid, colors.gradientEnd],
+    accent: [colors.accent, colors.accentDark],
+    subtle: [`${colors.primary}15`, `${colors.accent}10`],
+  }
+
   return (
     <LinearGradient
-      colors={[colors.gradientStart, colors.gradientEnd]}
+      colors={gradientColors[variant]}
       start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
-      style={styles.gradient}
+      end={{ x: 1, y: 1 }}
+      style={[styles.gradient, elevation.lg]}
     >
       {children}
     </LinearGradient>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   gradient: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
-});
+})

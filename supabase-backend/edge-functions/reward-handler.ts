@@ -32,7 +32,7 @@ const toNumber = (value: unknown, fallback: number): number => {
   return fallback;
 };
 
-const rewardSelect = "id, user_id, campaign_id, amount, status, created_at, paid_at, " + "users:user_id ( id, email, full_name ), " + "campaigns:campaign_id ( id, name, brand )";
+const rewardSelect = "id, user_id, campaign_id, amount, status, created_at, paid_at, " + "users:user_id ( id, email ), " + "campaigns:campaign_id ( id, name, brand )";
 serve(async (req)=>{
   if (req.method === "OPTIONS") {
     return new Response("ok", {

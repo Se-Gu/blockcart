@@ -1,61 +1,35 @@
 import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-
-type ReceiptItem = {
-  name: string;
-  brand?: string | null;
-  price: number;
-};
-
-type ReviewedFieldsPayload = {
-  store?: string | null;
-  location?: string | null;
-  receipt_date?: string | null;
-  receipt_time?: string | null;
-  payment_method?: string | null;
-  total?: number | null;
-  items?: ReceiptItem[] | null;
-};
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 };
-
-function normalizeNumeric(value: unknown): number | null {
+function normalizeNumeric(value) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
   }
-
   if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
-
   return null;
 }
-
-function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
+function sanitizeReviewedFields(input) {
   if (!input || typeof input !== "object") {
     return null;
   }
-
-  const source = input as Record<string, unknown>;
-  const sanitized: ReviewedFieldsPayload = {};
-
-  const stringKeys: Array<keyof ReviewedFieldsPayload> = [
+  const source = input;
+  const sanitized = {};
+  const stringKeys = [
     "store",
     "location",
     "receipt_date",
     "receipt_time",
-    "payment_method",
+    "payment_method"
   ];
-
-  for (const key of stringKeys) {
+  for (const key of stringKeys){
     if (!(key in source)) continue;
-    const raw = source[key as string];
+    const raw = source[key];
     if (raw === undefined) continue;
     if (raw === null) {
       sanitized[key] = null;
@@ -63,348 +37,226 @@ function sanitizeReviewedFields(input: unknown): ReviewedFieldsPayload | null {
     }
     if (typeof raw === "string") {
       const trimmed = raw.trim();
-      (sanitized as Record<string, string | null>)[key] = trimmed.length > 0 ? trimmed : null;
+      sanitized[key] = trimmed.length > 0 ? trimmed : null;
       continue;
     }
     if (typeof raw === "number" || typeof raw === "boolean") {
-      (sanitized as Record<string, string | null>)[key] = String(raw);
+      sanitized[key] = String(raw);
     }
   }
-
   if ("total" in source) {
     const rawTotal = source.total;
     if (rawTotal !== undefined) {
       if (rawTotal === null) {
         sanitized.total = null;
       } else if (typeof rawTotal === "number") {
-        sanitized.total = Number.isFinite(rawTotal)
-          ? Math.round(rawTotal * 100) / 100
-          : null;
+        sanitized.total = Number.isFinite(rawTotal) ? Math.round(rawTotal * 100) / 100 : null;
       } else if (typeof rawTotal === "string") {
         const trimmed = rawTotal.trim();
         if (trimmed.length === 0) {
           sanitized.total = null;
         } else {
           const parsed = Number(trimmed);
-          sanitized.total = Number.isFinite(parsed)
-            ? Math.round(parsed * 100) / 100
-            : null;
+          sanitized.total = Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
         }
       }
     }
   }
-
   // Handle items array
   if ("items" in source) {
     const rawItems = source.items;
     if (rawItems === null) {
       sanitized.items = null;
     } else if (Array.isArray(rawItems)) {
-      const validItems: ReceiptItem[] = rawItems.filter((item): item is ReceiptItem => 
-        typeof item === "object" &&
-        item !== null &&
-        "name" in item &&
-        typeof item.name === "string" &&
-        item.name.trim().length > 0 &&
-        "price" in item &&
-        typeof item.price === "number" &&
-        Number.isFinite(item.price)
-      );
+      const validItems = rawItems.filter((item)=>typeof item === "object" && item !== null && "name" in item && typeof item.name === "string" && item.name.trim().length > 0 && "price" in item && typeof item.price === "number" && Number.isFinite(item.price));
       sanitized.items = validItems.length > 0 ? validItems : null;
     } else {
       sanitized.items = null;
     }
   }
-
   return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
-
-type EmailPayload = {
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-};
-
-async function sendReviewOutcomeEmail({
-  to,
-  subject,
-  text,
-  html,
-}: EmailPayload) {
+async function sendReviewOutcomeEmail({ to, subject, text, html }) {
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
   const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL");
-
   if (!resendApiKey || !resendFromEmail) {
-    console.warn(
-      "[review-handler] RESEND_API_KEY or RESEND_FROM_EMAIL not configured. Skipping email notification.",
-    );
+    console.warn("[review-handler] RESEND_API_KEY or RESEND_FROM_EMAIL not configured. Skipping email notification.");
     return;
   }
-
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
       from: resendFromEmail,
       to,
       subject,
       text,
-      html,
-    }),
+      html
+    })
   });
-
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new Error(
-      `Failed to send review outcome email (status ${response.status}): ${responseBody}`,
-    );
+    throw new Error(`Failed to send review outcome email (status ${response.status}): ${responseBody}`);
   }
 }
-
-serve(async (req) => {
+serve(async (req)=>{
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", {
+      headers: corsHeaders
+    });
   }
-
   try {
-    const {
-      receipt_id,
-      reviewer_id,
-      approved,
-      reviewed_fields,
-      comment,
-      user_id,
-    } = await req.json();
-
+    const { receipt_id, reviewer_id, approved, reviewed_fields, comment, user_id } = await req.json();
     if (!receipt_id || !reviewer_id || typeof approved !== "boolean") {
       console.error("[review-handler] Missing or invalid review payload", {
         receipt_id,
         reviewer_id,
-        approved,
+        approved
       });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Invalid review payload",
-        }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Invalid review payload"
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
     }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error(
-        "[review-handler] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars",
-      );
+      console.error("[review-handler] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
       throw new Error("Service configuration error");
     }
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-
     const hasReviewedFields = reviewed_fields !== undefined;
-    const sanitizedFields = hasReviewedFields
-      ? sanitizeReviewedFields(reviewed_fields)
-      : null;
+    const sanitizedFields = hasReviewedFields ? sanitizeReviewedFields(reviewed_fields) : null;
     const now = new Date().toISOString();
     const trimmedComment = typeof comment === "string" ? comment.trim() : "";
-    let rewardAmount: number | null = null;
-    let campaignMatch:
-      | {
-        campaign_id: string;
-        amount: number | null;
-        description: string | null;
-      }
-      | null = null;
-
-    const receiptUpdate: Record<string, unknown> = {
+    let rewardAmount = null;
+    let campaignMatch = null;
+    const receiptUpdate = {
       reviewed_by: reviewer_id,
       status: approved ? "approved" : "rejected",
       updated_at: now,
-      rejection_reason: !approved && trimmedComment.length > 0 ? trimmedComment : null,
+      rejection_reason: !approved && trimmedComment.length > 0 ? trimmedComment : null
     };
-
-    let previousFields: ReviewedFieldsPayload | null = null;
-
+    let previousFields = null;
     if (sanitizedFields) {
-      const trackedKeys: Array<keyof ReviewedFieldsPayload> = [
+      const trackedKeys = [
         "store",
         "location",
         "payment_method",
         "receipt_date",
         "receipt_time",
-        "total",
+        "total"
       ];
-
-      const { data: existingReceipt, error: receiptFetchError } = await supabase
-        .from("receipts")
-        .select(trackedKeys.join(", "))
-        .eq("id", receipt_id)
-        .maybeSingle();
-
+      const { data: existingReceipt, error: receiptFetchError } = await supabase.from("receipts").select(trackedKeys.join(", ")).eq("id", receipt_id).maybeSingle();
       if (receiptFetchError) {
-        console.error(
-          `[review-handler] Failed to fetch current receipt values for ${receipt_id}`,
-          receiptFetchError,
-        );
+        console.error(`[review-handler] Failed to fetch current receipt values for ${receipt_id}`, receiptFetchError);
         throw new Error("Unable to fetch current receipt details");
       }
-
       if (existingReceipt) {
         previousFields = {};
-        const existingReceiptRecord =
-          existingReceipt as Record<string, unknown>;
-
-        for (const key of trackedKeys) {
+        const existingReceiptRecord = existingReceipt;
+        for (const key of trackedKeys){
           const nextValue = sanitizedFields[key];
           if (nextValue !== undefined) {
             const rawValue = existingReceiptRecord[key];
             if (key === "total") {
-              (previousFields as Record<string, number | null>)[key] = 
-                (typeof rawValue === "number") ? rawValue : null;
+              previousFields[key] = typeof rawValue === "number" ? rawValue : null;
             } else {
-              (previousFields as Record<string, string | null>)[key] = 
-                (typeof rawValue === "string") ? rawValue : null;
+              previousFields[key] = typeof rawValue === "string" ? rawValue : null;
             }
           }
         }
-
         if (Object.keys(previousFields).length === 0) {
           previousFields = null;
         }
       }
     }
-
     if (hasReviewedFields) {
       receiptUpdate.reviewed_fields = sanitizedFields ?? null;
-
       // Only update top-level columns for fields that have matching database columns
       // Items should NOT be written to a top-level column (it doesn't exist)
       if (sanitizedFields) {
-        const topLevelFields = ["store", "location", "receipt_date", "receipt_time", "payment_method", "total"];
-        for (const [key, value] of Object.entries(sanitizedFields)) {
+        const topLevelFields = [
+          "store",
+          "location",
+          "receipt_date",
+          "receipt_time",
+          "payment_method",
+          "total"
+        ];
+        for (const [key, value] of Object.entries(sanitizedFields)){
           if (value !== undefined && topLevelFields.includes(key)) {
             receiptUpdate[key] = value;
           }
         }
       }
     }
-
-    const { error: receiptError } = await supabase
-      .from("receipts")
-      .update(receiptUpdate)
-      .eq("id", receipt_id);
-
+    const { error: receiptError } = await supabase.from("receipts").update(receiptUpdate).eq("id", receipt_id);
     if (receiptError) {
-      console.error(
-        `[review-handler] Failed to update receipt ${receipt_id}`,
-        receiptError,
-      );
+      console.error(`[review-handler] Failed to update receipt ${receipt_id}`, receiptError);
       throw new Error("Unable to update receipt with reviewed data");
     }
-
-    const { error: assignmentError } = await supabase
-      .from("receipt_assignments")
-      .update({
-        status: "completed",
-        completed_at: now,
-      })
-      .eq("receipt_id", receipt_id)
-      .eq("reviewer_id", reviewer_id)
-      .eq("status", "assigned");
-
+    const { error: assignmentError } = await supabase.from("receipt_assignments").update({
+      status: "completed",
+      completed_at: now
+    }).eq("receipt_id", receipt_id).eq("reviewer_id", reviewer_id).eq("status", "assigned");
     if (assignmentError) {
-      console.error(
-        `[review-handler] Failed to update assignment for receipt ${receipt_id}`,
-        assignmentError,
-      );
+      console.error(`[review-handler] Failed to update assignment for receipt ${receipt_id}`, assignmentError);
     }
-
-    const reviewRecord: Record<string, unknown> = {
+    const reviewRecord = {
       receipt_id,
       reviewer_id,
       action: approved ? "approve" : "reject",
       new_fields: hasReviewedFields ? sanitizedFields ?? null : null,
-      comment: trimmedComment || null,
+      comment: trimmedComment || null
     };
-
     if (previousFields) {
       reviewRecord.previous_fields = previousFields;
     }
-
-    const { error: reviewInsertError } = await supabase
-      .from("receipt_reviews")
-      .insert(reviewRecord);
-
+    const { error: reviewInsertError } = await supabase.from("receipt_reviews").insert(reviewRecord);
     if (reviewInsertError) {
-      console.error(
-        `[review-handler] Failed to insert review record for receipt ${receipt_id}`,
-        reviewInsertError,
-      );
+      console.error(`[review-handler] Failed to insert review record for receipt ${receipt_id}`, reviewInsertError);
       throw new Error("Unable to record review history");
     }
-
     if (approved) {
       try {
-        const { data: matchData, error: matchError } = await supabase.rpc(
-          "match_active_campaigns",
-          { p_receipt_id: receipt_id },
-        );
-
+        const { data: matchData, error: matchError } = await supabase.rpc("match_active_campaigns", {
+          p_receipt_id: receipt_id
+        });
         if (matchError) {
-          console.warn(
-            `[review-handler] Campaign matching failed for receipt ${receipt_id}`,
-            matchError,
-          );
+          console.warn(`[review-handler] Campaign matching failed for receipt ${receipt_id}`, matchError);
         } else if (Array.isArray(matchData) && matchData.length > 0) {
-          const firstMatch = matchData[0] as
-            | {
-              campaign_id?: string | null;
-              amount?: number | string | null;
-              description?: string | null;
-            }
-            | undefined;
-
+          const firstMatch = matchData[0];
           if (firstMatch?.campaign_id) {
             const parsedAmount = normalizeNumeric(firstMatch.amount);
             campaignMatch = {
               campaign_id: firstMatch.campaign_id,
               amount: parsedAmount,
-              description: typeof firstMatch.description === "string"
-                ? firstMatch.description
-                : null,
+              description: typeof firstMatch.description === "string" ? firstMatch.description : null
             };
-
             if (parsedAmount !== null) {
               rewardAmount = parsedAmount;
             }
           }
         }
       } catch (matchError) {
-        console.error(
-          `[review-handler] Unexpected error while matching campaigns for receipt ${receipt_id}`,
-          matchError,
-        );
+        console.error(`[review-handler] Unexpected error while matching campaigns for receipt ${receipt_id}`, matchError);
       }
-
       try {
         const rewardUrl = `${supabaseUrl}/functions/v1/reward-handler`;
-        const rewardRequestPayload: Record<string, unknown> = {
+        const rewardRequestPayload = {
           receipt_id,
-          user_id,
+          user_id
         };
-
         if (campaignMatch) {
           rewardRequestPayload.campaign_id = campaignMatch.campaign_id;
           if (campaignMatch.amount !== null) {
@@ -414,143 +266,75 @@ serve(async (req) => {
             rewardRequestPayload.description = campaignMatch.description;
           }
         }
-
-        const rewardResponse = await fetch(
-          rewardUrl,
-          {
-            method: "POST",
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              apikey: serviceRoleKey,
-              Authorization: `Bearer ${serviceRoleKey}`,
-            },
-            body: JSON.stringify(rewardRequestPayload),
+        const rewardResponse = await fetch(rewardUrl, {
+          method: "POST",
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`
           },
-        );
-
+          body: JSON.stringify(rewardRequestPayload)
+        });
         if (!rewardResponse.ok) {
           if (rewardResponse.status === 409) {
-            console.warn(
-              `[review-handler] Reward handler reported existing reward for receipt ${receipt_id}. Treating as success.`,
-            );
+            console.warn(`[review-handler] Reward handler reported existing reward for receipt ${receipt_id}. Treating as success.`);
           } else {
             const rewardErrorBody = await rewardResponse.text();
-            console.error(
-              `[review-handler] Reward handler returned ${rewardResponse.status} for receipt ${receipt_id}`,
-              rewardErrorBody,
-            );
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error:
-                  "Failed to create reward for approved receipt. Please try again or contact support.",
-              }),
-              {
-                status: 502,
-                headers: {
-                  ...corsHeaders,
-                  "Content-Type": "application/json",
-                },
-              },
-            );
+            console.error(`[review-handler] Reward handler returned ${rewardResponse.status} for receipt ${receipt_id}`, rewardErrorBody);
+            return new Response(JSON.stringify({
+              success: false,
+              error: "Failed to create reward for approved receipt. Please try again or contact support."
+            }), {
+              status: 502,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json"
+              }
+            });
           }
         } else {
           try {
             const rewardPayload = await rewardResponse.json();
-            const extractedAmount =
-              rewardPayload?.amount ?? rewardPayload?.reward?.amount ?? null;
+            const extractedAmount = rewardPayload?.amount ?? rewardPayload?.reward?.amount ?? null;
             const parsedAmount = normalizeNumeric(extractedAmount);
             if (parsedAmount !== null) {
               rewardAmount = parsedAmount;
             }
           } catch (parseError) {
-            console.warn(
-              `[review-handler] Unable to parse reward handler response for receipt ${receipt_id}`,
-              parseError,
-            );
+            console.warn(`[review-handler] Unable to parse reward handler response for receipt ${receipt_id}`, parseError);
           }
         }
       } catch (error) {
-        console.error(
-          `[review-handler] Failed to invoke reward handler for receipt ${receipt_id}`,
-          error,
-        );
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error:
-              "Failed to create reward for approved receipt. Please try again or contact support.",
-          }),
-          {
-            status: 502,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-            },
-          },
-        );
+        console.error(`[review-handler] Failed to invoke reward handler for receipt ${receipt_id}`, error);
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Failed to create reward for approved receipt. Please try again or contact support."
+        }), {
+          status: 502,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        });
       }
     }
-
     if (user_id) {
-      const {
-        data: receiptDetails,
-        error: receiptDetailsError,
-      } = await supabase
-        .from("receipts")
-        .select(
-          "id, store, total, reward_amount, rejection_reason, users:user_id(email)",
-        )
-        .eq("id", receipt_id)
-        .maybeSingle();
-
-      if (receireviewer_notifications
-        console.error(
-          `[review-handler] Failed to fetch receipt details for notifications ${receipt_id}`,
-          receiptDetailsError,
-        );
+      const { data: receiptDetails, error: receiptDetailsError } = await supabase.from("receipts").select("id, store, total, reward_amount, rejection_reason, users:user_id(email)").eq("id", receipt_id).maybeSingle();
+      if (receiptDetailsError) {
+        console.error(`[review-handler] Failed to fetch receipt details for notifications ${receipt_id}`, receiptDetailsError);
         throw new Error("Unable to retrieve receipt information for notifications");
       }
-
-      const receiptRecord = receiptDetails as
-        | (Record<string, unknown> & {
-            users?: { email?: string | null } | null;
-          })
-        | null;
-
-      const receiptStoreRaw =
-        typeof receiptRecord?.store === "string" ? receiptRecord.store : null;
-      const receiptStore =
-        receiptStoreRaw && receiptStoreRaw.trim().length > 0
-          ? receiptStoreRaw.trim()
-          : "your recent receipt";
-      const storedRewardAmount = normalizeNumeric(
-        receiptRecord?.reward_amount,
-      );
-      const finalRewardAmount =
-        rewardAmount ?? storedRewardAmount ?? normalizeNumeric(receiptUpdate.reward_amount);
+      const receiptRecord = receiptDetails;
+      const receiptStoreRaw = typeof receiptRecord?.store === "string" ? receiptRecord.store : null;
+      const receiptStore = receiptStoreRaw && receiptStoreRaw.trim().length > 0 ? receiptStoreRaw.trim() : "your recent receipt";
+      const storedRewardAmount = normalizeNumeric(receiptRecord?.reward_amount);
+      const finalRewardAmount = rewardAmount ?? storedRewardAmount ?? normalizeNumeric(receiptUpdate.reward_amount);
       const receiptTotal = normalizeNumeric(receiptRecord?.total);
-      const rejectionDetail =
-        trimmedComment.length > 0
-          ? trimmedComment
-          : typeof receiptRecord?.rejection_reason === "string"
-            ? receiptRecord.rejection_reason
-            : null;
-
-      const notificationTitle = approved
-        ? "Receipt approved 🎉"
-        : "Receipt review update";
-
-      const notificationMessage = approved
-        ? `Your receipt from ${receiptStore} was approved${
-            finalRewardAmount ? ` and earned ${finalRewardAmount.toFixed(2)} BTC$` : ""
-          }.`
-        : `Your receipt from ${receiptStore} was not approved${
-            rejectionDetail ? `: ${rejectionDetail}` : "."
-          }`;
-
-      const notificationPayload: Record<string, unknown> = {
+      const rejectionDetail = trimmedComment.length > 0 ? trimmedComment : typeof receiptRecord?.rejection_reason === "string" ? receiptRecord.rejection_reason : null;
+      const notificationTitle = approved ? "Receipt approved 🎉" : "Receipt review update";
+      const notificationMessage = approved ? `Your receipt from ${receiptStore} was approved${finalRewardAmount ? ` and earned ${finalRewardAmount.toFixed(2)} BTC$` : ""}.` : `Your receipt from ${receiptStore} was not approved${rejectionDetail ? `: ${rejectionDetail}` : "."}`;
+      const notificationPayload = {
         user_id,
         receipt_id,
         status: "unread",
@@ -561,98 +345,72 @@ serve(async (req) => {
           store: receiptStore,
           reward_amount: finalRewardAmount,
           receipt_total: receiptTotal,
-          rejection_reason: rejectionDetail,
-        },
+          rejection_reason: rejectionDetail
+        }
       };
-
-      const { error: notificationError } = await supabase
-        .from("review_notifications")
-        .insert(notificationPayload);
-
+      const { error: notificationError } = await supabase.from("review_notifications").insert(notificationPayload);
       if (notificationError) {
-        console.error(
-          `[review-handler] Failed to persist notification for receipt ${receipt_id}`,
-          notificationError,
-        );
+        console.error(`[review-handler] Failed to persist notification for receipt ${receipt_id}`, notificationError);
         throw new Error("Unable to create review notification");
       }
-
       const userEmailRaw = receiptRecord?.users?.email;
-      const userEmail =
-        typeof userEmailRaw === "string" && userEmailRaw.includes("@")
-          ? userEmailRaw
-          : null;
-
+      const userEmail = typeof userEmailRaw === "string" && userEmailRaw.includes("@") ? userEmailRaw : null;
       if (userEmail) {
-        const subject = approved
-          ? "Your receipt was approved"
-          : "Update on your receipt review";
+        const subject = approved ? "Your receipt was approved" : "Update on your receipt review";
         const greeting = `Hi there,`;
-        const bodyLines = approved
-          ? [
-              `Good news! Your receipt from ${receiptStore} was approved.`,
-              finalRewardAmount
-                ? `You've earned ${finalRewardAmount.toFixed(2)} BTC$ as a reward.`
-                : "Thanks for helping keep the Blockcart community running!",
-              "Rewards will appear in your wallet shortly.",
-            ]
-          : [
-              `We reviewed your receipt from ${receiptStore}, but it couldn't be approved.`,
-              rejectionDetail
-                ? `Reason: ${rejectionDetail}`
-                : "Unfortunately we couldn't verify the details provided.",
-              "You can try submitting a clearer photo if you'd like us to take another look.",
-            ];
+        const bodyLines = approved ? [
+          `Good news! Your receipt from ${receiptStore} was approved.`,
+          finalRewardAmount ? `You've earned ${finalRewardAmount.toFixed(2)} BTC$ as a reward.` : "Thanks for helping keep the Blockcart community running!",
+          "Rewards will appear in your wallet shortly."
+        ] : [
+          `We reviewed your receipt from ${receiptStore}, but it couldn't be approved.`,
+          rejectionDetail ? `Reason: ${rejectionDetail}` : "Unfortunately we couldn't verify the details provided.",
+          "You can try submitting a clearer photo if you'd like us to take another look."
+        ];
         const closing = "— The Blockcart Team";
-
-        const textContent = [greeting, "", ...bodyLines, "", closing].join("\n");
+        const textContent = [
+          greeting,
+          "",
+          ...bodyLines,
+          "",
+          closing
+        ].join("\n");
         const htmlContent = `
           <p>${greeting}</p>
-          ${bodyLines.map((line) => `<p>${line}</p>`).join("")}
+          ${bodyLines.map((line)=>`<p>${line}</p>`).join("")}
           <p>${closing}</p>
         `;
-
         try {
           await sendReviewOutcomeEmail({
             to: userEmail,
             subject,
             text: textContent,
-            html: htmlContent,
+            html: htmlContent
           });
         } catch (emailError) {
-          console.error(
-            `[review-handler] Failed to send review outcome email for receipt ${receipt_id}`,
-            emailError,
-          );
+          console.error(`[review-handler] Failed to send review outcome email for receipt ${receipt_id}`, emailError);
         }
       }
     }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return new Response(JSON.stringify({
+      success: true
+    }), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
   } catch (error) {
     console.error("[review-handler] Unexpected error", error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return new Response(JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
   }
 });

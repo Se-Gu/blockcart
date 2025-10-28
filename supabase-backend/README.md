@@ -15,11 +15,14 @@ The backend consists of:
 ```
 supabase-backend/
 ├── database/
-│   ├── migration_add_email_to_web_users.sql    # Migration to add email to web_users
-│   ├── migration_fix_schema_discrepancies.sql  # Schema fixes migration
-│   ├── migration_scripts/                      # Additional migration scripts
-│   ├── schema.sql                             # Main database schema
-│   └── views.sql                              # Database views
+│   ├── migrations/
+│   │   ├── migration_add_email_to_web_users.sql         # Add email to web_users
+│   │   ├── migration_fix_schema_discrepancies.sql       # Schema fixes
+│   │   ├── migration_add_reviewer_notifications.sql     # Create notifications table
+│   │   ├── migration_add_notification_fields.sql        # Add title, message, status columns
+│   │   └── ...                                          # Other migrations
+│   ├── schema.sql                                       # Main database schema
+│   └── views.sql                                        # Database views
 └── edge-functions/
     ├── admin-settings.ts                      # Admin configuration management
     ├── analytics-dashboard.ts                 # Analytics data aggregation
@@ -49,12 +52,15 @@ supabase-backend/
 
 1. Go to your Supabase Dashboard
 2. Navigate to **SQL Editor**
-3. Run the schema files in order:
+3. Run the migration files in order from the `database/migrations/` directory:
 
    ```sql
-   -- Run schema.sql first (main schema)
-   -- Then run migration_fix_schema_discrepancies.sql
-   -- Finally run migration_add_email_to_web_users.sql
+   -- Run migrations in chronological order
+   -- 1. migration_fix_schema_discrepancies.sql
+   -- 2. migration_add_email_to_web_users.sql
+   -- 3. migration_add_reviewer_notifications.sql
+   -- 4. migration_add_notification_fields.sql
+   -- ... (other migrations as needed)
    ```
 
 4. Alternatively, use the Supabase CLI:
@@ -171,8 +177,18 @@ The main entities in the database include:
 - **`campaigns`**: Reward campaigns
 - **`rewards`**: User rewards and points
 - **`referrals`**: Referral tracking
+- **`reviewer_notifications`**: Notifications for reviewers when receipts are assigned
+- **`receipt_assignments`**: Tracks which receipts are assigned to which reviewers
 
 See `database/schema.sql` for the complete schema definition.
+
+### Recent Schema Changes
+
+**Migration: Add Notification Fields (Oct 2025)**
+- Added `title`, `message`, and `status` columns to `reviewer_notifications` table
+- These fields enable rich notifications in the mobile app
+- A trigger automatically syncs `status` with `read_at` timestamp
+- See `database/migrations/migration_add_notification_fields.sql`
 
 ## Deployment
 
