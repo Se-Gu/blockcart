@@ -156,7 +156,8 @@ export default function ProfileScreen({ navigation }: Props) {
     }
     clearWalletError();
     const timestamp = new Date().toISOString();
-    const message = `Blockcart wallet verification\nUser: ${session.user.id}\nTimestamp: ${timestamp}`;
+    // Simplified message format for Phantom mobile compatibility
+    const message = `Blockcart wallet verification User: ${session.user.id} Timestamp: ${timestamp}`;
     try {
       await connectWallet({ message });
     } catch (err) {

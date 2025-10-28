@@ -131,6 +131,12 @@ export const usePhantomWallet = () => {
         message: bs58.encode(Buffer.from(message, "utf8")),
       };
 
+      console.log("Requesting signature with:", { 
+        sessionLength: session.length, 
+        messageLength: message.length,
+        messagePreview: message.substring(0, 50)
+      });
+
       const encryptedPayload = nacl.box.after(
         Buffer.from(JSON.stringify(payload), "utf8"),
         nonce,
@@ -146,6 +152,7 @@ export const usePhantomWallet = () => {
         `&payload=${encodeURIComponent(bs58.encode(encryptedPayload))}` +
         `&nonce=${encodeURIComponent(bs58.encode(nonce))}`;
 
+      console.log("Opening signMessage URL");
       pendingActionRef.current = "signMessage";
       await Linking.openURL(url);
     } catch (err) {
@@ -171,11 +178,14 @@ export const usePhantomWallet = () => {
         return;
       }
 
+      console.log("Deep link received:", { path, queryParams });
+
       const errorCode =
         (queryParams?.errorCode as string | undefined) ??
         (queryParams?.error_code as string | undefined) ??
         null;
       if (errorCode) {
+        console.log("Phantom returned error:", { errorCode, errorMessage: queryParams?.errorMessage ?? queryParams?.error });
         resetInternalState();
         setStatus("error");
         const fallback =
@@ -185,81 +195,55 @@ export const usePhantomWallet = () => {
         return;
       }
 
-      const dappKeyPair = dappKeyPairRef.current;
-      if (!dappKeyPair) {
-        resetInternalState();
-        setStatus("error");
-        setError("Wallet session was not initialized. Please try again.");
-        return;
-      }
-
-      const phantomPublicKeyParam = queryParams?.phantom_encryption_public_key;
-      const nonceParam = queryParams?.nonce;
-      const dataParam = queryParams?.data;
-
-      if (
-        typeof phantomPublicKeyParam !== "string" ||
-        typeof nonceParam !== "string" ||
-        typeof dataParam !== "string"
-      ) {
-        resetInternalState();
-        setStatus("error");
-        setError("Wallet response was missing required parameters.");
-        return;
-      }
-
-      const sharedSecret = nacl.box.before(
-        bs58.decode(phantomPublicKeyParam),
-        dappKeyPair.secretKey,
-      );
-      sharedSecretRef.current = sharedSecret;
-
-      const decrypted = nacl.box.open.after(
-        bs58.decode(dataParam),
-        bs58.decode(nonceParam),
-        sharedSecret,
-      );
-
-      if (!decrypted) {
-        resetInternalState();
-        setStatus("error");
-        setError("Failed to decrypt wallet response.");
-        return;
-      }
-
-      let payload: Record<string, unknown>;
-      try {
-        payload = JSON.parse(Buffer.from(decrypted).toString("utf8"));
-      } catch (err) {
-        resetInternalState();
-        setStatus("error");
-        setError(
-          err instanceof Error ? err.message : "Wallet response was invalid.",
-        );
-        return;
-      }
-
       const action = path.split("/").pop();
 
-      if (action === "connect") {
-        const publicKey = payload?.public_key as string | undefined;
-        const session = payload?.session as string | undefined;
-
-        if (!publicKey || !session) {
+      // Handle "signMessage" differently - it doesn't need phantom_encryption_public_key
+      if (action === "signMessage") {
+        // For signMessage, we already have the shared secret from connect
+        const sharedSecret = sharedSecretRef.current;
+        if (!sharedSecret) {
           resetInternalState();
           setStatus("error");
-          setError("Wallet did not return a public key.");
+          setError("Wallet session expired. Please try again.");
           return;
         }
 
-        pendingAddressRef.current = publicKey;
-        sessionRef.current = session;
-        setStatus("verifying");
-        await requestSignature();
-        return;
-      }
+        const nonceParam = queryParams?.nonce;
+        const dataParam = queryParams?.data;
 
-      if (action === "signMessage") {
+        if (typeof nonceParam !== "string" || typeof dataParam !== "string") {
+          console.log("Missing params for signMessage:", { nonceParam, dataParam });
+          resetInternalState();
+          setStatus("error");
+          setError("Wallet response was missing required parameters.");
+          return;
+        }
+
+        const decrypted = nacl.box.open.after(
+          bs58.decode(dataParam),
+          bs58.decode(nonceParam),
+          sharedSecret,
+        );
+
+        if (!decrypted) {
+          resetInternalState();
+          setStatus("error");
+          setError("Failed to decrypt wallet response.");
+          return;
+        }
+
+        let payload: Record<string, unknown>;
+        try {
+          payload = JSON.parse(Buffer.from(decrypted).toString("utf8"));
+        } catch (err) {
+          resetInternalState();
+          setStatus("error");
+          setError(
+            err instanceof Error ? err.message : "Wallet response was invalid.",
+          );
+          return;
+        }
+
         const activeAddress = pendingAddressRef.current;
         const activeMessage = messageRef.current;
         const signatureValue = payload?.signature as string | undefined;
@@ -303,7 +287,81 @@ export const usePhantomWallet = () => {
               : "Failed to validate wallet signature.",
           );
         }
+        return;
       }
+
+      // Handle "connect" action - need to establish shared secret
+      const dappKeyPair = dappKeyPairRef.current;
+      if (!dappKeyPair) {
+        resetInternalState();
+        setStatus("error");
+        setError("Wallet session was not initialized. Please try again.");
+        return;
+      }
+
+      const phantomPublicKeyParam = queryParams?.phantom_encryption_public_key;
+      const nonceParam = queryParams?.nonce;
+      const dataParam = queryParams?.data;
+
+      if (
+        typeof phantomPublicKeyParam !== "string" ||
+        typeof nonceParam !== "string" ||
+        typeof dataParam !== "string"
+      ) {
+        console.log("Missing params for connect:", { phantomPublicKeyParam, nonceParam, dataParam, allParams: queryParams });
+        resetInternalState();
+        setStatus("error");
+        setError("Wallet response was missing required parameters.");
+        return;
+      }
+
+      const sharedSecret = nacl.box.before(
+        bs58.decode(phantomPublicKeyParam),
+        dappKeyPair.secretKey,
+      );
+      sharedSecretRef.current = sharedSecret;
+
+      const decrypted = nacl.box.open.after(
+        bs58.decode(dataParam),
+        bs58.decode(nonceParam),
+        sharedSecret,
+      );
+
+      if (!decrypted) {
+        resetInternalState();
+        setStatus("error");
+        setError("Failed to decrypt wallet response.");
+        return;
+      }
+
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(Buffer.from(decrypted).toString("utf8"));
+      } catch (err) {
+        resetInternalState();
+        setStatus("error");
+        setError(
+          err instanceof Error ? err.message : "Wallet response was invalid.",
+        );
+        return;
+      }
+
+      // This is the "connect" action handler
+      const publicKey = payload?.public_key as string | undefined;
+      const session = payload?.session as string | undefined;
+
+      if (!publicKey || !session) {
+        resetInternalState();
+        setStatus("error");
+        setError("Wallet did not return a public key.");
+        return;
+      }
+
+      pendingAddressRef.current = publicKey;
+      sessionRef.current = session;
+      setStatus("verifying");
+      await requestSignature();
+      return;
     },
     [requestSignature, resetInternalState],
   );
