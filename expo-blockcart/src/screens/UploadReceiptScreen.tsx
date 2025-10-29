@@ -14,6 +14,7 @@ import {
 } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -223,14 +224,51 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         return;
       }
 
-      const response = await fetch(selectedImage.uri);
-      const blob = await response.blob();
-      const path = `${session.user.id}/${uuidv4()}.jpg`;
+      // Read file as base64 using legacy API
+      const base64 = await readAsStringAsync(selectedImage.uri, {
+        encoding: "base64",
+      });
+
+      // Convert base64 to Uint8Array
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+
+      // Determine file extension from fileName or mimeType
+      const getFileExtension = () => {
+        if (selectedImage.fileName) {
+          const match = selectedImage.fileName.match(/\.([^.]+)$/);
+          if (match) return match[1];
+        }
+        // Fallback to mimeType
+        if (selectedImage.mimeType) {
+          if (selectedImage.mimeType.includes("jpeg") || selectedImage.mimeType.includes("jpg")) {
+            return "jpg";
+          }
+          if (selectedImage.mimeType.includes("png")) {
+            return "png";
+          }
+          if (selectedImage.mimeType.includes("webp")) {
+            return "webp";
+          }
+        }
+        // Default to jpg
+        return "jpg";
+      };
+
+      const fileExtension = getFileExtension();
+      const path = `${session.user.id}/${uuidv4()}.${fileExtension}`;
+      
+      // Use actual mimeType from asset, fallback to image/jpeg
+      const contentType = selectedImage.mimeType || "image/jpeg";
 
       const { error: uploadError } = await supabase.storage
         .from("receipts")
-        .upload(path, blob, {
-          contentType: "image/jpeg",
+        .upload(path, byteArray, {
+          contentType: contentType,
           upsert: false,
         });
 
