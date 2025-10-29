@@ -269,7 +269,7 @@ export default function WalletScreen({ navigation }: Props) {
     <ScrollView
       contentContainerStyle={dynamicStyles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing}USDTRefresh={handleRefresh} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
       <LinearGradient
@@ -315,7 +315,7 @@ export default function WalletScreen({ navigation }: Props) {
                 icon="wallet-outline"
                 size={64}
                 iconColor={theme.colors.outline}
-              />USDT
+              />
               <Text
                 variant="bodyLarge"
                 style={{
@@ -358,11 +358,11 @@ export default function WalletScreen({ navigation }: Props) {
                 <List.Item
                   title={reward.campaignLabel ?? "Receipt Reward"}
                   titleStyle={{ fontWeight: "600" }}
-                  description={[USDT
+                  description={[
                     new Date(reward.created_at).toLocaleDateString(),
                     reward.receipt?.store ?? "Unknown store",
                     reward.description ?? null,
-                  ]USDT
+                  ]
                     .filter(Boolean)
                     .join(" • ")}
                   left={() => (

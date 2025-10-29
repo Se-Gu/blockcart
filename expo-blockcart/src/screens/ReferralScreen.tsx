@@ -181,13 +181,13 @@ export default function ReferralScreen(_props: Props) {
         <Card.Content style={styles.cardContent}>
           <Text variant="titleMedium">Bonuses earned from referrals</Text>
           <Text variant="headlineSmall" style={{ marginTop: 8 }}>
-            {bonusEarned.toFixed(2)} USDT$
+            {bonusEarned.toFixed(2)} BTC$
           </Text>
           {profile?.bonus_total ? (
             <Text
               style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
             >
-              Platform reported total: {profile.bonus_total.toFixed(2)} USDT$
+              Platform reported total: {profile.bonus_total.toFixed(2)} BTC$
             </Text>
           ) : null}
         </Card.Content>

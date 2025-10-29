@@ -333,7 +333,7 @@ serve(async (req)=>{
       const receiptTotal = normalizeNumeric(receiptRecord?.total);
       const rejectionDetail = trimmedComment.length > 0 ? trimmedComment : typeof receiptRecord?.rejection_reason === "string" ? receiptRecord.rejection_reason : null;
       const notificationTitle = approved ? "Receipt approved 🎉" : "Receipt review update";
-      const notificationMessage = approved ? `Your receipt from ${receiptStore} was approved${finalRewardAmount ? ` and earned ${finalRewardAmount.toFixed(2)} USDT$` : ""}.` : `Your receipt from ${receiptStore} was not approved${rejectionDetail ? `: ${rejectionDetail}` : "."}`;
+      const notificationMessage = approved ? `Your receipt from ${receiptStore} was approved${finalRewardAmount ? ` and earned ${finalRewardAmount.toFixed(2)} BTC$` : ""}.` : `Your receipt from ${receiptStore} was not approved${rejectionDetail ? `: ${rejectionDetail}` : "."}`;
       const notificationPayload = {
         user_id,
         receipt_id,
@@ -360,7 +360,7 @@ serve(async (req)=>{
         const greeting = `Hi there,`;
         const bodyLines = approved ? [
           `Good news! Your receipt from ${receiptStore} was approved.`,
-          finalRewardAmount ? `You've earned ${finalRewardAmount.toFixed(2)} USDT$ as a reward.` : "Thanks for helping keep the Blockcart community running!",
+          finalRewardAmount ? `You've earned ${finalRewardAmount.toFixed(2)} BTC$ as a reward.` : "Thanks for helping keep the Blockcart community running!",
           "Rewards will appear in your wallet shortly."
         ] : [
           `We reviewed your receipt from ${receiptStore}, but it couldn't be approved.`,

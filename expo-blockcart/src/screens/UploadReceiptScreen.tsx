@@ -333,7 +333,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
                   iconColor="#FFFFFF"
                   style={styles.removeButton}
                   onPress={() => setSelectedImage(null)}
-                />USDT
+                />
               </View>
             </View>
           ) : (
@@ -460,7 +460,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
           </Text>
           <Text variant="bodyLarge" style={styles.modalText}>
             {successMessage ??
-              "We're processing your receipt. You'll be noUSDTied when it's approved."}
+              "We're processing your receipt. You'll be notified when it's approved."}
           </Text>
           {successCampaign ? (
             <Text variant="bodyMedium" style={styles.modalCampaignText}>
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerIconContainer: {
-    borderRadius: borderRadius.lg,USDT
+    borderRadius: borderRadius.lg,
     overflow: "hidden",
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   subtitle: {
-    textAlign: "center",USDT
+    textAlign: "center",
     color: colors.textSecondary,
     lineHeight: 24,
     paddingHorizontal: spacing.md,
