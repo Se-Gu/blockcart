@@ -1,6 +1,7 @@
 "use client"
 
 import "react-native-gesture-handler"
+import "./polyfills"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { AppState, type AppStateStatus, Platform, useColorScheme } from "react-native"
 import {
@@ -155,14 +156,14 @@ export default function App() {
     }
 
     const receiptsChannel = supabase
-      .channel(`receipts-updates-${session.user.id}`)
+      .channel(`receipts-status-updates-${session.user.id}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "receipts",
-          filter: `reviewer_id=eq.${session.user.id}`,
+          filter: `user_id=eq.${session.user.id}`,
         },
         async (payload: RealtimePostgresChangesPayload<Receipt>) => {
           const newRow = (payload.new ?? {}) as Partial<Receipt>

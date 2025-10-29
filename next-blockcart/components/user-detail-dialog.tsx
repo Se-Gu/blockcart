@@ -149,12 +149,16 @@ export function UserDetailDialog({ user, open, onOpenChange, onUpdateRole }: Use
               <p className="text-sm font-medium">{user.email}</p>
             </div>
 
-            {user.wallet_address && (
-              <div>
-                <Label className="text-muted-foreground">Wallet Address</Label>
-                <p className="font-mono text-xs sm:text-sm break-all">{user.wallet_address}</p>
-              </div>
-            )}
+            <div>
+              <Label className="text-muted-foreground">Wallet Address</Label>
+              {user.wallet_address ? (
+                <p className="font-mono text-xs sm:text-sm break-all">
+                  {user.wallet_address}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No wallet on file</p>
+              )}
+            </div>
 
             {user.referral_code && (
               <div>

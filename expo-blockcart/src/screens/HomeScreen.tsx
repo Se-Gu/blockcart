@@ -145,6 +145,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const {
     campaigns,
     loading: campaignsLoading,
@@ -160,7 +161,7 @@ export default function HomeScreen({ navigation }: Props) {
     }
     setLoading(true);
     try {
-      const [balanceResponse, receiptsResponse] = await Promise.all([
+      const [balanceResponse, receiptsResponse, profileResponse] = await Promise.all([
         supabase
           .from("user_balances")
           .select("total_balance")
@@ -175,6 +176,11 @@ export default function HomeScreen({ navigation }: Props) {
           .in("status", RECEIPT_STATUSES)
           .order("created_at", { ascending: false })
           .limit(MAX_RECENT_RECEIPTS),
+        supabase
+          .from("users")
+          .select("wallet_address")
+          .eq("id", session.user.id)
+          .maybeSingle(),
       ]);
 
       if (balanceResponse.error) {
@@ -182,6 +188,9 @@ export default function HomeScreen({ navigation }: Props) {
       }
       if (receiptsResponse.error) {
         throw receiptsResponse.error;
+      }
+      if (profileResponse.error) {
+        throw profileResponse.error;
       }
 
       const balanceData = balanceResponse.data as BalanceRow | null;
@@ -192,6 +201,12 @@ export default function HomeScreen({ navigation }: Props) {
 
       setBalance(balanceData?.total_balance ?? 0);
       setReceipts(receiptsData as Receipt[]);
+      const profileData = profileResponse.data as { wallet_address?: string | null } | null;
+      setWalletAddress(
+        profileData?.wallet_address && typeof profileData.wallet_address === "string"
+          ? profileData.wallet_address
+          : null,
+      );
     } catch (err) {
       handleError(err, "Loading home data");
     } finally {
@@ -531,7 +546,9 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
 
             <Text variant="bodyMedium" style={dynamicStyles.balanceSubtext}>
-              Keep uploading receipts to earn more rewards
+              {walletAddress
+                ? "Payouts flow to your connected Solana wallet."
+                : "Add a Solana wallet to cash out your BTC$ rewards."}
             </Text>
 
             <View style={dynamicStyles.quickActions}>

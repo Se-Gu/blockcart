@@ -115,6 +115,7 @@ export type Profile = {
   kyc_age?: number | null;
   kyc_sex?: string | null;
   bonus_total?: number | null;
+  wallet_address?: string | null;
 };
 
 export type ReviewNotificationStatus = "unread" | "read";
