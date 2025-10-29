@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
-import { Loader2, ShieldCheck } from "lucide-react"
+import { Loader2 } from "lucide-react"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -55,7 +56,13 @@ export default function LoginPage() {
       <Card className="relative w-full max-w-md border-border/60 shadow-2xl backdrop-blur-sm">
         <CardHeader className="space-y-3 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <ShieldCheck className="h-8 w-8 text-primary" />
+            <Image
+              src="/favicon.png"
+              alt="Blockcart"
+              width={56}
+              height={56}
+              className="h-8 w-8 object-contain"
+            />
           </div>
           <CardTitle className="text-3xl font-bold tracking-tight">Blockcart Admin</CardTitle>
           <CardDescription className="text-base">
