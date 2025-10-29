@@ -6,7 +6,7 @@ A React Native app built with Expo that allows users to upload receipts and earn
 
 - **Receipt Upload**: Capture or select receipt images
 - **OCR Processing**: Automatic receipt parsing using Supabase Edge Functions
-- **Reward System**: Earn BTC$ tokens for approved receipts
+- **Reward System**: Earn USDT$ tokens for approved receipts
 - **User Profiles**: Manage personal information and referral codes
 - **Real-time Updates**: Live notifications for receipt status changes
 - **Comprehensive Error Handling**: User-friendly error messages with toast notifications

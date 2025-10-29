@@ -188,7 +188,7 @@ const formatCampaignBonus = (campaign: Campaign): string => {
     Number.isFinite(campaign.reward_amount) &&
     campaign.reward_amount > 0
   ) {
-    return `${campaign.reward_amount.toFixed(2)} BTC$ bonus`;
+    return `${campaign.reward_amount.toFixed(2)} USDT$ bonus`;
   }
 
   if (
