@@ -38,6 +38,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useReviewerNotifications } from "@/lib/notifications"
+import Image from "next/image"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -168,7 +169,16 @@ export function DashboardLayout({ children, userRole, userEmail, userName }: Das
       >
         <div className="flex h-full flex-col">
           <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
-            <h1 className="text-xl font-bold tracking-tight text-sidebar-foreground">Blockcart</h1>
+            <div className="flex items-center gap-2">
+              <Image
+                src="/favicon.png"
+                alt="Blockcart"
+                width={32}
+                height={32}
+                className="h-8 w-8 object-contain"
+              />
+              <h1 className="text-xl font-bold tracking-tight text-sidebar-foreground">Blockcart</h1>
+            </div>
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="h-5 w-5" />
             </Button>

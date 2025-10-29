@@ -1,13 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { KeyboardAvoidingView, Platform, StyleSheet, View, ScrollView } from "react-native"
+import { KeyboardAvoidingView, Platform, StyleSheet, View, ScrollView, Image } from "react-native"
 import { Text, TextInput, Button, Surface, useTheme } from "react-native-paper"
 import { LinearGradient } from "expo-linear-gradient"
 import { supabase } from "../lib/supabase"
 import { parseError } from "../lib/errorParser"
 import { useToast } from "../components/ToastProvider"
 import { colors, spacing, borderRadius } from "../theme/colors"
+
+const logoSource = require("../../assets/icon.jpg")
 
 export default function LoginScreen() {
   const theme = useTheme()
@@ -127,11 +129,12 @@ export default function LoginScreen() {
       shadowOpacity: 0.4,
       shadowRadius: 16,
       elevation: 8,
+      overflow: "hidden",
     },
-    logoText: {
-      fontSize: 32,
-      fontWeight: "700",
-      color: theme.colors.onSurface,
+    logoImage: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
     },
     title: {
       textAlign: "center",
@@ -209,7 +212,7 @@ export default function LoginScreen() {
                     end={{ x: 1, y: 1 }}
                     style={dynamicStyles.logoGradient}
                   >
-                    <Text style={dynamicStyles.logoText}>BC</Text>
+                    <Image source={logoSource} style={dynamicStyles.logoImage} resizeMode="cover" />
                   </LinearGradient>
                 </View>
 

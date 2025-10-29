@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description: "Blockcart Admin Dashboard",
   generator: "v0.app",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/favicon.png",
   },
 };
 

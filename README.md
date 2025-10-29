@@ -12,7 +12,7 @@ A comprehensive full-stack receipt rewards application that enables users to upl
 
 **Download & Open:**
 1. Install **Expo Go** from the [App Store](https://apps.apple.com/app/expo-go/id982107779) (iOS) or [Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent) (Android)
-2. Open the link `https://expo.dev/preview/update?message=Add+expo-file-system+dependency+and+enhance+image+upload+handling%0A%0A-+Introduced+%60expo-file-system%60+to+%60package.json%60+and+%60packag&updateRuntimeVersion=1.0.0&createdAt=2025-10-29T15%3A48%3A22.331Z&slug=exp&projectId=d4acf625-87e2-43b2-9723-92f64d1fbacb&group=7026e5c1-8b9d-4978-9865-0230c7e051c2`
+2. [Open the preview link](https://expo.dev/preview/update?message=Add+logo+and+update+README+for+enhanced+user+guidance%0A%0A-+Added+a+new+logo+image+for+the+Blockcart+application.%0A-+Updated+README.&updateRuntimeVersion=1.0.0&createdAt=2025-10-29T16%3A02%3A28.106Z&slug=exp&projectId=d4acf625-87e2-43b2-9723-92f64d1fbacb&group=e796f67c-34d8-42d2-b4bf-36087a968e1d)
 
 **Login Credentials:**
 - New users can create an account directly in the app
