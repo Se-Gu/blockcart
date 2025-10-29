@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Image, ScrollView, View, StyleSheet } from "react-native";
+import { ScrollView, View, StyleSheet, Image } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Button,
@@ -91,14 +91,20 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         assetsCount: result.assets?.length ?? 0,
       });
 
-      if (!result.canceled) {
-        console.log("📸 Image selected:", {
-          uri: result.assets[0].uri,
-          width: result.assets[0].width,
-          height: result.assets[0].height,
-          type: result.assets[0].type,
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📸 Image selected - Full asset details:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
         });
-        setSelectedImage(result.assets[0]);
+        console.log("📸 Setting selectedImage state...");
+        setSelectedImage(asset);
+        console.log("📸 State updated successfully");
       } else {
         console.log("📸 User canceled image selection");
       }
@@ -139,14 +145,20 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         assetsCount: result.assets?.length ?? 0,
       });
 
-      if (!result.canceled) {
-        console.log("📷 Photo captured:", {
-          uri: result.assets[0].uri,
-          width: result.assets[0].width,
-          height: result.assets[0].height,
-          type: result.assets[0].type,
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📷 Photo captured - Full asset details:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
         });
-        setSelectedImage(result.assets[0]);
+        console.log("📷 Setting selectedImage state...");
+        setSelectedImage(asset);
+        console.log("📷 State updated successfully");
       } else {
         console.log("📷 User canceled camera");
       }
@@ -382,22 +394,43 @@ export default function UploadReceiptScreen({ navigation }: Props) {
 
         <View style={styles.imageSection}>
           {selectedImage ? (
-            <View style={styles.imageContainer}>
+            <>
               <Image
                 source={{ uri: selectedImage.uri }}
-                style={styles.image}
-                resizeMode="cover"
+                style={{ width: "100%", height: 320 }}
+                resizeMode="contain"
+                onLoadStart={() => {
+                  console.log("🖼️ Image loading started for URI:", selectedImage.uri);
+                }}
+                onLoad={(event) => {
+                  console.log("🖼️ Image loaded successfully!");
+                  console.log("🖼️ Loaded dimensions:", {
+                    width: event.nativeEvent.source.width,
+                    height: event.nativeEvent.source.height,
+                    uri: selectedImage.uri,
+                  });
+                }}
+                onError={(error) => {
+                  console.error("🖼️ Image failed to load:", error.nativeEvent?.error);
+                  console.error("🖼️ Failed URI:", selectedImage.uri);
+                }}
               />
-              <View style={styles.imageOverlay}>
-                <IconButton
-                  icon="close-circle"
-                  size={36}
-                  iconColor="#FFFFFF"
-                  style={styles.removeButton}
-                  onPress={() => setSelectedImage(null)}
-                />
-              </View>
-            </View>
+              <IconButton
+                icon="close-circle"
+                size={36}
+                iconColor="#FFFFFF"
+                containerColor={colors.error}
+                style={{
+                  position: "absolute",
+                  top: spacing.lg + spacing.md,
+                  right: spacing.lg + spacing.md,
+                }}
+                onPress={() => {
+                  console.log("🗑️ Removing selected image");
+                  setSelectedImage(null);
+                }}
+              />
+            </>
           ) : (
             <View
               style={[styles.dropZone, { borderColor: theme.colors.outline }]}
@@ -622,12 +655,15 @@ const styles = StyleSheet.create({
   imageContainer: {
     borderRadius: borderRadius.xl,
     height: 320,
+    width: "100%",
     overflow: "hidden",
-    backgroundColor: colors.surfaceVariant,
+    backgroundColor: "#F5F5F5",
+    position: "relative",
   },
   image: {
     width: "100%",
     height: "100%",
+    flex: 1,
   },
   imageOverlay: {
     position: "absolute",
@@ -639,6 +675,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "flex-end",
     padding: spacing.md,
+  },
+  imageOverlayButton: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 10,
   },
   removeButton: {
     backgroundColor: colors.error,
