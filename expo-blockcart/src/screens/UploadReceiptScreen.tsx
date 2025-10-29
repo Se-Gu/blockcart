@@ -57,40 +57,102 @@ export default function UploadReceiptScreen({ navigation }: Props) {
   >(null);
 
   const pickImage = useCallback(async () => {
-    const mediaLibraryPermission =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log("📸 Gallery button pressed - starting pickImage");
+    
+    try {
+      console.log("📸 Requesting media library permissions...");
+      const mediaLibraryPermission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      console.log("📸 Permission result:", {
+        granted: mediaLibraryPermission.granted,
+        canAskAgain: mediaLibraryPermission.canAskAgain,
+        status: mediaLibraryPermission.status,
+      });
 
-    if (!mediaLibraryPermission.granted) {
-      showWarning(
-        "Gallery access required. Please enable photo permissions."
-      );
-      return;
-    }
+      if (!mediaLibraryPermission.granted) {
+        console.log("📸 Permission denied!");
+        showWarning(
+          "Gallery access required. Please enable photo permissions."
+        );
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: false,
-      quality: 0.7,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
+      console.log("📸 Permission granted! Launching image library...");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        selectionLimit: 1,
+        quality: 0.7,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+      console.log("📸 Image library result:", {
+        canceled: result.canceled,
+        hasAssets: (result.assets?.length ?? 0) > 0,
+        assetsCount: result.assets?.length ?? 0,
+      });
+
+      if (!result.canceled) {
+        console.log("📸 Image selected:", {
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          type: result.assets[0].type,
+        });
+        setSelectedImage(result.assets[0]);
+      } else {
+        console.log("📸 User canceled image selection");
+      }
+    } catch (error) {
+      console.error("📸 Error in pickImage:", error);
+      showWarning("Failed to open gallery. Please try again.");
     }
   }, [showWarning]);
 
   const captureImage = useCallback(async () => {
-    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cameraPermission.granted) {
-      showWarning("Camera access required. Please enable camera permissions.");
-      return;
-    }
+    console.log("📷 Camera button pressed - starting captureImage");
+    
+    try {
+      console.log("📷 Requesting camera permissions...");
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      
+      console.log("📷 Permission result:", {
+        granted: cameraPermission.granted,
+        canAskAgain: cameraPermission.canAskAgain,
+        status: cameraPermission.status,
+      });
+      
+      if (!cameraPermission.granted) {
+        console.log("📷 Camera permission denied!");
+        showWarning("Camera access required. Please enable camera permissions.");
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-    });
+      console.log("📷 Permission granted! Launching camera...");
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+      console.log("📷 Camera result:", {
+        canceled: result.canceled,
+        hasAssets: (result.assets?.length ?? 0) > 0,
+        assetsCount: result.assets?.length ?? 0,
+      });
+
+      if (!result.canceled) {
+        console.log("📷 Photo captured:", {
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          type: result.assets[0].type,
+        });
+        setSelectedImage(result.assets[0]);
+      } else {
+        console.log("📷 User canceled camera");
+      }
+    } catch (error) {
+      console.error("📷 Error in captureImage:", error);
+      showWarning("Failed to open camera. Please try again.");
     }
   }, [showWarning]);
 
