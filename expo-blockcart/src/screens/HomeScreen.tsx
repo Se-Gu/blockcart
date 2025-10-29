@@ -516,7 +516,7 @@ export default function HomeScreen({ navigation }: Props) {
           >
             <View style={dynamicStyles.patternOverlay} />
 
-            <View USDTle={dynamicStyles.balanceHeader}>
+            <View style={dynamicStyles.balanceHeader}>
               <View>
                 <Text variant="labelLarge" style={dynamicStyles.balanceLabel}>
                   Total Balance
@@ -531,7 +531,7 @@ export default function HomeScreen({ navigation }: Props) {
                   variant="titleMedium"
                   style={dynamicStyles.balanceCurrency}
                 >
-                  BTC$
+                  USDT$
                 </Text>
               </View>
 
@@ -548,7 +548,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text variant="bodyMedium" style={dynamicStyles.balanceSubtext}>
               {walletAddress
                 ? "Payouts flow to your connected Solana wallet."
-                : "Add a Solana wallet to cash out your BTC$ rewards."}
+                : "Add a Solana wallet to cash out your USDT$ rewards."}
             </Text>
 
             <View style={dynamicStyles.quickActions}>
@@ -693,7 +693,7 @@ export default function HomeScreen({ navigation }: Props) {
                 {...props}
                 icon="chevron-right"
                 onPress={() => handleNavigateToReceipts()}
-              />USDT
+              />
             )}
           />
           <Card.Content>
@@ -710,7 +710,7 @@ export default function HomeScreen({ navigation }: Props) {
                   No receipts yet
                 </Text>
                 <Text variant="bodyMedium" style={dynamicStyles.emptySubtitle}>
-                  Upload your first receipt to start earning BTC$
+                  Upload your first receipt to start earning USDT$
                 </Text>
                 <Button
                   mode="contained"

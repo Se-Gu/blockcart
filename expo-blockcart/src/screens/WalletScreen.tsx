@@ -269,7 +269,7 @@ export default function WalletScreen({ navigation }: Props) {
     <ScrollView
       contentContainerStyle={dynamicStyles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing}USDTRefresh={handleRefresh} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
       <LinearGradient
@@ -282,12 +282,12 @@ export default function WalletScreen({ navigation }: Props) {
           Total Balance
         </Text>
         <Text variant="displayMedium" style={dynamicStyles.balanceAmount}>
-          {totalBalance?.toFixed(2) ?? "0.00"} BTC$
+          {totalBalance?.toFixed(2) ?? "0.00"} USDT$
         </Text>
         <Text variant="bodyMedium" style={dynamicStyles.balanceSubtext}>
           {walletAddress
             ? "Payouts will be routed to your connected Solana wallet."
-            : "Add a Solana wallet to withdraw your BTC$ rewards."}
+            : "Add a Solana wallet to withdraw your USDT$ rewards."}
         </Text>
         <Button
           mode="contained-tonal"
@@ -315,7 +315,7 @@ export default function WalletScreen({ navigation }: Props) {
                 icon="wallet-outline"
                 size={64}
                 iconColor={theme.colors.outline}
-              />USDT
+              />
               <Text
                 variant="bodyLarge"
                 style={{
@@ -333,7 +333,7 @@ export default function WalletScreen({ navigation }: Props) {
                   marginTop: spacing.xs,
                 }}
               >
-                Upload receipts to start earning BTC$
+                Upload receipts to start earning USDT$
               </Text>
               {!walletAddress ? (
                 <Text
@@ -358,11 +358,11 @@ export default function WalletScreen({ navigation }: Props) {
                 <List.Item
                   title={reward.campaignLabel ?? "Receipt Reward"}
                   titleStyle={{ fontWeight: "600" }}
-                  description={[USDT
+                  description={[
                     new Date(reward.created_at).toLocaleDateString(),
                     reward.receipt?.store ?? "Unknown store",
                     reward.description ?? null,
-                  ]USDT
+                  ]
                     .filter(Boolean)
                     .join(" • ")}
                   left={() => (
@@ -388,11 +388,11 @@ export default function WalletScreen({ navigation }: Props) {
                   right={() => (
                     <View style={dynamicStyles.rewardAmountWrapper}>
                       <Text style={dynamicStyles.rewardAmount}>
-                        +{formatCurrency(reward.amount)} BTC$
+                        +{formatCurrency(reward.amount)} USDT$
                       </Text>
                       {reward.campaignBonus ? (
                         <Text style={dynamicStyles.rewardBonus}>
-                          Bonus +{formatCurrency(reward.campaignBonus)} BTC$
+                          Bonus +{formatCurrency(reward.campaignBonus)} USDT$
                         </Text>
                       ) : null}
                       {reward.campaignMultiplier && reward.campaignMultiplier > 1 ? (

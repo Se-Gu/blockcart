@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Image, ScrollView, View, StyleSheet } from "react-native";
+import { ScrollView, View, StyleSheet, Image } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   Button,
@@ -14,6 +14,7 @@ import {
 } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -57,40 +58,114 @@ export default function UploadReceiptScreen({ navigation }: Props) {
   >(null);
 
   const pickImage = useCallback(async () => {
-    const mediaLibraryPermission =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log("📸 Gallery button pressed - starting pickImage");
+    
+    try {
+      console.log("📸 Requesting media library permissions...");
+      const mediaLibraryPermission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      console.log("📸 Permission result:", {
+        granted: mediaLibraryPermission.granted,
+        canAskAgain: mediaLibraryPermission.canAskAgain,
+        status: mediaLibraryPermission.status,
+      });
 
-    if (!mediaLibraryPermission.granted) {
-      showWarning(
-        "Gallery access required. Please enable photo permissions."
-      );
-      return;
-    }
+      if (!mediaLibraryPermission.granted) {
+        console.log("📸 Permission denied!");
+        showWarning(
+          "Gallery access required. Please enable photo permissions."
+        );
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: false,
-      quality: 0.7,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
+      console.log("📸 Permission granted! Launching image library...");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        selectionLimit: 1,
+        quality: 0.7,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+      console.log("📸 Image library result:", {
+        canceled: result.canceled,
+        hasAssets: (result.assets?.length ?? 0) > 0,
+        assetsCount: result.assets?.length ?? 0,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📸 Image selected - Full asset details:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
+        });
+        console.log("📸 Setting selectedImage state...");
+        setSelectedImage(asset);
+        console.log("📸 State updated successfully");
+      } else {
+        console.log("📸 User canceled image selection");
+      }
+    } catch (error) {
+      console.error("📸 Error in pickImage:", error);
+      showWarning("Failed to open gallery. Please try again.");
     }
   }, [showWarning]);
 
   const captureImage = useCallback(async () => {
-    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cameraPermission.granted) {
-      showWarning("Camera access required. Please enable camera permissions.");
-      return;
-    }
+    console.log("📷 Camera button pressed - starting captureImage");
+    
+    try {
+      console.log("📷 Requesting camera permissions...");
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      
+      console.log("📷 Permission result:", {
+        granted: cameraPermission.granted,
+        canAskAgain: cameraPermission.canAskAgain,
+        status: cameraPermission.status,
+      });
+      
+      if (!cameraPermission.granted) {
+        console.log("📷 Camera permission denied!");
+        showWarning("Camera access required. Please enable camera permissions.");
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-    });
+      console.log("📷 Permission granted! Launching camera...");
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+      console.log("📷 Camera result:", {
+        canceled: result.canceled,
+        hasAssets: (result.assets?.length ?? 0) > 0,
+        assetsCount: result.assets?.length ?? 0,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📷 Photo captured - Full asset details:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
+        });
+        console.log("📷 Setting selectedImage state...");
+        setSelectedImage(asset);
+        console.log("📷 State updated successfully");
+      } else {
+        console.log("📷 User canceled camera");
+      }
+    } catch (error) {
+      console.error("📷 Error in captureImage:", error);
+      showWarning("Failed to open camera. Please try again.");
     }
   }, [showWarning]);
 
@@ -149,14 +224,51 @@ export default function UploadReceiptScreen({ navigation }: Props) {
         return;
       }
 
-      const response = await fetch(selectedImage.uri);
-      const blob = await response.blob();
-      const path = `${session.user.id}/${uuidv4()}.jpg`;
+      // Read file as base64 using legacy API
+      const base64 = await readAsStringAsync(selectedImage.uri, {
+        encoding: "base64",
+      });
+
+      // Convert base64 to Uint8Array
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+
+      // Determine file extension from fileName or mimeType
+      const getFileExtension = () => {
+        if (selectedImage.fileName) {
+          const match = selectedImage.fileName.match(/\.([^.]+)$/);
+          if (match) return match[1];
+        }
+        // Fallback to mimeType
+        if (selectedImage.mimeType) {
+          if (selectedImage.mimeType.includes("jpeg") || selectedImage.mimeType.includes("jpg")) {
+            return "jpg";
+          }
+          if (selectedImage.mimeType.includes("png")) {
+            return "png";
+          }
+          if (selectedImage.mimeType.includes("webp")) {
+            return "webp";
+          }
+        }
+        // Default to jpg
+        return "jpg";
+      };
+
+      const fileExtension = getFileExtension();
+      const path = `${session.user.id}/${uuidv4()}.${fileExtension}`;
+      
+      // Use actual mimeType from asset, fallback to image/jpeg
+      const contentType = selectedImage.mimeType || "image/jpeg";
 
       const { error: uploadError } = await supabase.storage
         .from("receipts")
-        .upload(path, blob, {
-          contentType: "image/jpeg",
+        .upload(path, byteArray, {
+          contentType: contentType,
           upsert: false,
         });
 
@@ -235,7 +347,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
               name: campaignName,
               bonusText:
                 bonusAmount && bonusAmount > 0
-                  ? `Bonus: +${bonusAmount.toFixed(2)} BTC$`
+                  ? `Bonus: +${bonusAmount.toFixed(2)} USDT$`
                   : multiplier && multiplier > 1
                     ? `${multiplier.toFixed(2)}x rewards applied`
                     : null,
@@ -314,28 +426,49 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             Upload Receipt
           </Text>
           <Text variant="bodyLarge" style={styles.subtitle}>
-            Capture a clear photo of your receipt to earn BTC$ rewards
+            Capture a clear photo of your receipt to earn USDT$ rewards
           </Text>
         </LinearGradient>
 
         <View style={styles.imageSection}>
           {selectedImage ? (
-            <View style={styles.imageContainer}>
+            <>
               <Image
                 source={{ uri: selectedImage.uri }}
-                style={styles.image}
-                resizeMode="cover"
+                style={{ width: "100%", height: 320 }}
+                resizeMode="contain"
+                onLoadStart={() => {
+                  console.log("🖼️ Image loading started for URI:", selectedImage.uri);
+                }}
+                onLoad={(event) => {
+                  console.log("🖼️ Image loaded successfully!");
+                  console.log("🖼️ Loaded dimensions:", {
+                    width: event.nativeEvent.source.width,
+                    height: event.nativeEvent.source.height,
+                    uri: selectedImage.uri,
+                  });
+                }}
+                onError={(error) => {
+                  console.error("🖼️ Image failed to load:", error.nativeEvent?.error);
+                  console.error("🖼️ Failed URI:", selectedImage.uri);
+                }}
               />
-              <View style={styles.imageOverlay}>
-                <IconButton
-                  icon="close-circle"
-                  size={36}
-                  iconColor="#FFFFFF"
-                  style={styles.removeButton}
-                  onPress={() => setSelectedImage(null)}
-                />USDT
-              </View>
-            </View>
+              <IconButton
+                icon="close-circle"
+                size={36}
+                iconColor="#FFFFFF"
+                containerColor={colors.error}
+                style={{
+                  position: "absolute",
+                  top: spacing.lg + spacing.md,
+                  right: spacing.lg + spacing.md,
+                }}
+                onPress={() => {
+                  console.log("🗑️ Removing selected image");
+                  setSelectedImage(null);
+                }}
+              />
+            </>
           ) : (
             <View
               style={[styles.dropZone, { borderColor: theme.colors.outline }]}
@@ -460,7 +593,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
           </Text>
           <Text variant="bodyLarge" style={styles.modalText}>
             {successMessage ??
-              "We're processing your receipt. You'll be noUSDTied when it's approved."}
+              "We're processing your receipt. You'll be notified when it's approved."}
           </Text>
           {successCampaign ? (
             <Text variant="bodyMedium" style={styles.modalCampaignText}>
@@ -529,7 +662,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerIconContainer: {
-    borderRadius: borderRadius.lg,USDT
+    borderRadius: borderRadius.lg,
     overflow: "hidden",
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -549,7 +682,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   subtitle: {
-    textAlign: "center",USDT
+    textAlign: "center",
     color: colors.textSecondary,
     lineHeight: 24,
     paddingHorizontal: spacing.md,
@@ -560,12 +693,15 @@ const styles = StyleSheet.create({
   imageContainer: {
     borderRadius: borderRadius.xl,
     height: 320,
+    width: "100%",
     overflow: "hidden",
-    backgroundColor: colors.surfaceVariant,
+    backgroundColor: "#F5F5F5",
+    position: "relative",
   },
   image: {
     width: "100%",
     height: "100%",
+    flex: 1,
   },
   imageOverlay: {
     position: "absolute",
@@ -577,6 +713,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "flex-end",
     padding: spacing.md,
+  },
+  imageOverlayButton: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    zIndex: 10,
   },
   removeButton: {
     backgroundColor: colors.error,

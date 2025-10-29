@@ -185,7 +185,7 @@ export default function ProfileScreen({ navigation }: Props) {
       return "Saving wallet address...";
     }
     if (walletOnFile) {
-      return "Wallet connected for BTC$ payouts.";
+      return "Wallet connected for USDT$ payouts.";
     }
     return "No wallet connected.";
   }, [walletOnFile, walletPersisting, walletStatus]);
@@ -255,7 +255,7 @@ export default function ProfileScreen({ navigation }: Props) {
             variant="bodyMedium"
             style={{ color: theme.colors.onSurfaceVariant }}
           >
-            Connect a Solana wallet to receive BTC$ payouts directly.
+            Connect a Solana wallet to receive USDT$ payouts directly.
           </Text>
           <View style={styles.walletInfo}>
             {walletOnFile ? (
