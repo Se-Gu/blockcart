@@ -29,7 +29,7 @@ const formatCampaignBonus = (campaign: Campaign): string => {
     Number.isFinite(campaign.reward_amount) &&
     campaign.reward_amount > 0
   ) {
-    return `Earn +${campaign.reward_amount.toFixed(2)} BTC$ per receipt`;
+    return `Earn +${campaign.reward_amount.toFixed(2)} USDT$ per receipt`;
   }
 
   if (
@@ -328,7 +328,7 @@ export default function CampaignDetailScreen({ route, navigation }: Props) {
                 Status: {statusLabel}
               </Text>
               <Text variant="bodyMedium" style={{ color: colors.textSecondary }}>
-                {campaign?.description ?? "Upload receipts that match the rules below to earn extra BTC$."}
+                {campaign?.description ?? "Upload receipts that match the rules below to earn extra USDT$."}
               </Text>
             </>
           )}

@@ -41,7 +41,7 @@ const formatCampaignBonus = (campaign: Campaign): string => {
     Number.isFinite(campaign.reward_amount) &&
     campaign.reward_amount > 0
   ) {
-    return `+${campaign.reward_amount.toFixed(2)} BTC$`;
+    return `+${campaign.reward_amount.toFixed(2)} USDT$`;
   }
 
   if (
@@ -113,7 +113,7 @@ const formatCampaignProgress = (campaign: Campaign): string | null => {
     typeof progress.amountAwarded === "number" &&
     typeof progress.amountRemaining === "number"
   ) {
-    return `${progress.amountAwarded.toFixed(2)} BTC$ earned`;
+    return `${progress.amountAwarded.toFixed(2)} USDT$ earned`;
   }
 
   return null;
@@ -516,7 +516,7 @@ export default function HomeScreen({ navigation }: Props) {
           >
             <View style={dynamicStyles.patternOverlay} />
 
-            <View style={dynamicStyles.balanceHeader}>
+            <View USDTle={dynamicStyles.balanceHeader}>
               <View>
                 <Text variant="labelLarge" style={dynamicStyles.balanceLabel}>
                   Total Balance
@@ -693,7 +693,7 @@ export default function HomeScreen({ navigation }: Props) {
                 {...props}
                 icon="chevron-right"
                 onPress={() => handleNavigateToReceipts()}
-              />
+              />USDT
             )}
           />
           <Card.Content>
