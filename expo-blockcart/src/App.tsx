@@ -173,11 +173,11 @@ export default function App() {
 
           if (newStatus === "approved" && oldStatus !== "approved") {
             const rewardAmount = newRow.reward_amount
-            const rewardText = rewardAmount && rewardAmount > 0 ? ` ${rewardAmount.toFixed(2)} BTC$!` : "!"
+            const rewardText = rewardAmount && rewardAmount > 0 ? ` ${rewardAmount.toFixed(2)} USDT$!` : "!"
 
             await Notifications.scheduleNotificationAsync({
               content: {
-                title: "🎉 Your receipt earned BTC$!",
+                title: "🎉 Your receipt earned USDT$!",
                 body: `Your receipt was approved${rewardText}`,
               },
               trigger: null,

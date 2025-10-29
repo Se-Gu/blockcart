@@ -41,7 +41,7 @@ const formatCampaignBonus = (campaign: Campaign): string => {
     Number.isFinite(campaign.reward_amount) &&
     campaign.reward_amount > 0
   ) {
-    return `+${campaign.reward_amount.toFixed(2)} BTC$`;
+    return `+${campaign.reward_amount.toFixed(2)} USDT$`;
   }
 
   if (
@@ -113,7 +113,7 @@ const formatCampaignProgress = (campaign: Campaign): string | null => {
     typeof progress.amountAwarded === "number" &&
     typeof progress.amountRemaining === "number"
   ) {
-    return `${progress.amountAwarded.toFixed(2)} BTC$ earned`;
+    return `${progress.amountAwarded.toFixed(2)} USDT$ earned`;
   }
 
   return null;
@@ -531,7 +531,7 @@ export default function HomeScreen({ navigation }: Props) {
                   variant="titleMedium"
                   style={dynamicStyles.balanceCurrency}
                 >
-                  BTC$
+                  USDT$
                 </Text>
               </View>
 
@@ -548,7 +548,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text variant="bodyMedium" style={dynamicStyles.balanceSubtext}>
               {walletAddress
                 ? "Payouts flow to your connected Solana wallet."
-                : "Add a Solana wallet to cash out your BTC$ rewards."}
+                : "Add a Solana wallet to cash out your USDT$ rewards."}
             </Text>
 
             <View style={dynamicStyles.quickActions}>
@@ -710,7 +710,7 @@ export default function HomeScreen({ navigation }: Props) {
                   No receipts yet
                 </Text>
                 <Text variant="bodyMedium" style={dynamicStyles.emptySubtitle}>
-                  Upload your first receipt to start earning BTC$
+                  Upload your first receipt to start earning USDT$
                 </Text>
                 <Button
                   mode="contained"

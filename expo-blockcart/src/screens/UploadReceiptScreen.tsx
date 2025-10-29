@@ -235,7 +235,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
               name: campaignName,
               bonusText:
                 bonusAmount && bonusAmount > 0
-                  ? `Bonus: +${bonusAmount.toFixed(2)} BTC$`
+                  ? `Bonus: +${bonusAmount.toFixed(2)} USDT$`
                   : multiplier && multiplier > 1
                     ? `${multiplier.toFixed(2)}x rewards applied`
                     : null,
@@ -314,7 +314,7 @@ export default function UploadReceiptScreen({ navigation }: Props) {
             Upload Receipt
           </Text>
           <Text variant="bodyLarge" style={styles.subtitle}>
-            Capture a clear photo of your receipt to earn BTC$ rewards
+            Capture a clear photo of your receipt to earn USDT$ rewards
           </Text>
         </LinearGradient>
 
