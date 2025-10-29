@@ -1,172 +1,29 @@
 # Blockcart Admin Dashboard
 
-A Next.js application for managing receipt submissions, user referrals, and reward campaigns.
+A comprehensive Next.js admin dashboard for managing receipt submissions, user referrals, reward campaigns, and platform analytics. Built with Next.js 15, TypeScript, and Supabase for a powerful administrative interface.
 
-## Features
+## 🎯 Features
 
-- User authentication and authorization
-- Receipt management and approval
-- User management
-- Campaign creation and management
-- Reward distribution
-- Referral tracking
-- Analytics dashboard
+- **User Management**: View and manage user accounts, roles, and permissions
+- **Receipt Review**: Review, approve, or reject receipt submissions
+- **Campaign Management**: Create and manage reward campaigns with rule builder
+- **Reward Distribution**: Track and manage user rewards and payouts
+- **Referral Tracking**: Monitor referral relationships and commissions
+- **Analytics Dashboard**: Comprehensive analytics and reporting
+- **Role-Based Access**: Separate admin and reviewer roles with appropriate permissions
+- **Real-time Updates**: Live data updates and notifications
+- **Campaign Templates**: Pre-built templates for common promotion types
 
-## Campaign templates & eligibility tooling
+## 🚀 Quick Start
 
-Blockcart partnerships can now launch promotions without touching raw JSON. The
-dashboard surfaces curated templates that map directly to the structured
-`rule_json` schema:
-
-- **Double Rewards Weekend** – toggles the `multiplier_overrides.double_base`
-  flag while enforcing a `$25` `min_spend`.
-- **Grocery Basket Bonus** – uses the `fixed_bonus` reward type with
-  store-specific targeting via `eligible_stores` and a `$40` minimum receipt
-  total.
-- **Referral Boost** – enables the `referral_boost` reward type, requires a
-  referral relationship (`referral.required`) and enforces verified identities
-  through the demographic filters.
-
-While configuring a campaign you can select one of these templates, tweak
-individual fields through structured inputs (store pickers, demographic
-filters, and multiplier toggles), and view live eligibility counts powered by
-the Supabase `campaign_eligibility_snapshots` view and `preview_campaign_rule`
-RPC.
-
-## Authentication
-
-### Supabase Authentication Setup
-
-This application uses Supabase for authentication. Make sure you have the following environment variables configured:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### Authentication Flow
-
-1. **Login Process**: Users enter their email and password
-2. **Supabase Response**: Returns user session and user data
-3. **Session Management**: JWT tokens are stored in httpOnly cookies
-4. **Route Protection**: Middleware checks for valid sessions
-
-### Reviewer Invite Flow
-
-1. **Invite Sent**: Admin sends invite via `/dashboard/settings` (calls `invite-reviewer` edge function)
-2. **Email Received**: Reviewer receives invite email from Supabase with verification link
-3. **Link Clicked**: Reviewer clicks link which redirects to `/reviewer-verify?token=...`
-4. **Token Verification**: Page verifies the token and establishes Supabase session
-5. **Password Setup**: Reviewer sets their password
-6. **Session Established**: User is authenticated and redirected to `/dashboard`
-7. **Access Granted**: Reviewer can now access reviewer-only pages (e.g., `/dashboard/receipts`)
-
-### Expected Supabase Authentication Responses
-
-#### Successful Login Response
-
-```typescript
-{
-  data: {
-    user: {
-      id: "uuid",
-      email: "user@example.com",
-      email_confirmed_at: "2024-01-01T00:00:00.000Z",
-      created_at: "2024-01-01T00:00:00.000Z",
-      updated_at: "2024-01-01T00:00:00.000Z",
-      aud: "authenticated",
-      role: "authenticated"
-    },
-    session: {
-      access_token: "jwt_token",
-      refresh_token: "refresh_token",
-      expires_in: 3600,
-      expires_at: 1704067200,
-      token_type: "bearer",
-      user: {
-        id: "uuid",
-        email: "user@example.com",
-        // ... user data
-      }
-    }
-  },
-  error: null
-}
-```
-
-#### Authentication Error Responses
-
-```typescript
-// Invalid credentials
-{
-  data: { user: null, session: null },
-  error: {
-    message: "Invalid login credentials",
-    status: 400
-  }
-}
-
-// User not found
-{
-  data: { user: null, session: null },
-  error: {
-    message: "User not found",
-    status: 400
-  }
-}
-
-// Too many requests
-{
-  data: { user: null, session: null },
-  error: {
-    message: "Too many requests. Please try again later.",
-    status: 429
-  }
-}
-```
-
-#### Session Check Response
-
-```typescript
-{
-  data: {
-    session: {
-      access_token: "jwt_token",
-      refresh_token: "refresh_token",
-      // ... session data
-    }
-  },
-  error: null
-}
-```
-
-#### Current User Response
-
-```typescript
-{
-  data: {
-    user: {
-      id: "uuid",
-      email: "user@example.com",
-      email_confirmed_at: "2024-01-01T00:00:00.000Z",
-      created_at: "2024-01-01T00:00:00.000Z",
-      updated_at: "2024-01-01T00:00:00.000Z",
-      aud: "authenticated",
-      role: "authenticated"
-    }
-  },
-  error: null
-}
-```
-
-## Prerequisites
+### Prerequisites
 
 - **Node.js** 18+ installed
 - **npm**, **yarn**, or **pnpm** package manager
 - **Supabase Account** with a project set up
 - **Git** for version control
 
-## Installation
+### Installation
 
 1. **Install dependencies:**
 
@@ -200,9 +57,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    - Configure Row Level Security (RLS) policies
    - Create admin user accounts in the `web_users` table
 
-## Running the Application
+### Running the Application
 
-### Development Mode
+#### Development Mode
 
 ```bash
 # Start the development server
@@ -215,7 +72,7 @@ pnpm dev
 
 The application will be available at `http://localhost:3000`.
 
-### Production Mode
+#### Production Mode
 
 ```bash
 # Build the application
@@ -233,25 +90,392 @@ yarn start
 pnpm start
 ```
 
-### Additional Commands
+## 👥 User Guide
 
-```bash
-# Lint the code
-npm run lint
-# or
-yarn lint
-# or
-pnpm lint
+### Getting Started
 
-# Type checking (if using TypeScript)
-npm run type-check
-# or
-yarn type-check
-# or
-pnpm type-check
-```
+#### Login
 
-## Project Structure
+1. Navigate to the dashboard URL (default: `http://localhost:3000`)
+2. You'll be redirected to `/login` if not authenticated
+3. Enter your **email** and **password**
+4. Click **"Sign In"** to access the dashboard
+
+**Note**: Admin and reviewer accounts must be created in the `web_users` table in Supabase.
+
+#### First-Time Setup
+
+1. **Create Admin Account** (via Supabase Dashboard or SQL):
+   ```sql
+   INSERT INTO web_users (id, email, role, created_at)
+   VALUES (gen_random_uuid(), 'admin@example.com', 'admin', NOW());
+   ```
+2. **Set Password** in Supabase Authentication
+3. **Login** with your credentials
+
+### Dashboard Overview
+
+#### Main Dashboard (`/dashboard`)
+
+The main dashboard provides an overview of platform activity:
+
+**Statistics Cards:**
+- **Total Receipts**: All receipts submitted
+- **Pending Review**: Receipts awaiting reviewer action
+- **Total Users**: All registered users (Admin only)
+- **Active Users**: Users active in last 30 days (Admin only)
+- **Active Campaigns**: Currently running campaigns (Admin only)
+- **Approved Receipts**: Successfully verified receipts
+- **Rejected Receipts**: Receipts that didn't meet criteria
+
+**Sections:**
+- **Recent Receipts**: Latest receipt submissions
+- **Recent Activity**: Platform activity feed
+
+#### Navigation
+
+The dashboard uses a sidebar navigation with the following sections:
+
+**For Admins:**
+- Dashboard (Overview)
+- Receipts (View and manage)
+- Users (User management)
+- Campaigns (Campaign management)
+- Rewards (Reward tracking)
+- Referrals (Referral program)
+- Analytics (Reports and insights)
+- Settings (Platform configuration)
+
+**For Reviewers:**
+- Dashboard (Overview)
+- Receipts (Review and approve)
+
+### Receipt Management
+
+#### Viewing Receipts
+
+**Steps:**
+1. Navigate to **Receipts** in the sidebar
+2. View the receipts table with:
+   - Receipt ID
+   - User information
+   - Submission date
+   - Status
+   - Total amount
+   - Actions
+
+**Filtering:**
+- Filter by status (Pending, Approved, Rejected, etc.)
+- Filter by date range
+- Search by user email or receipt ID
+
+#### Reviewing Receipts
+
+**Steps:**
+1. Navigate to **Receipts** page
+2. Click on a receipt row or **"View Details"** button
+3. Review receipt details:
+   - Receipt image
+   - OCR extracted data
+   - User information
+   - Submission metadata
+4. **Make a decision:**
+   - **Approve**: Click "Approve" - user receives rewards
+   - **Reject**: Click "Reject" - provide rejection reason
+   - **Flag**: Mark for additional review
+5. Save your decision
+
+**Reviewer Workflow:**
+- Reviewers see assigned receipts in their queue
+- Focus on pending receipts requiring action
+- Bulk actions available for multiple receipts
+
+### Campaign Management
+
+#### Viewing Campaigns
+
+1. Navigate to **Campaigns** (Admin only)
+2. View all active and inactive campaigns
+3. See campaign details:
+   - Name and description
+   - Start/end dates
+   - Reward configuration
+   - Eligibility rules
+
+#### Creating Campaigns
+
+**Steps:**
+1. Navigate to **Campaigns** page
+2. Click **"Create Campaign"** button
+3. **Basic Information:**
+   - Campaign name
+   - Description
+   - Start date and end date
+   - Active status
+
+4. **Campaign Template** (optional):
+   - Select a template:
+     - **Double Rewards Weekend**: 2x multiplier with $25 minimum
+     - **Grocery Basket Bonus**: Fixed bonus for grocery stores with $40 minimum
+     - **Referral Boost**: Extra rewards for referred users
+   - Templates pre-configure common settings
+
+5. **Reward Configuration:**
+   - **Reward Type**: Choose multiplier, fixed bonus, or percentage
+   - **Reward Amount**: Set the reward value
+   - **Multiplier**: Set multiplier (e.g., 2x for double rewards)
+
+6. **Eligibility Rules:**
+   - **Store Filtering**: Select eligible stores
+   - **Minimum Spend**: Set minimum receipt total
+   - **Demographics**: Filter by age, gender, location
+   - **Referral Requirements**: Require referral relationship
+
+7. **Preview Eligibility:**
+   - Use the eligibility preview tool
+   - See how many users/receipts would qualify
+   - Adjust rules as needed
+
+8. Click **"Create Campaign"** to save
+
+#### Campaign Templates
+
+**Double Rewards Weekend:**
+- Multiplier: 2x base rewards
+- Minimum spend: $25
+- Quick setup for weekend promotions
+
+**Grocery Basket Bonus:**
+- Fixed bonus per receipt
+- Store targeting: Grocery stores
+- Minimum spend: $40
+- Perfect for grocery-specific promotions
+
+**Referral Boost:**
+- Bonus for referred users
+- Requires referral relationship
+- Demographic verification enabled
+
+#### Editing Campaigns
+
+1. Navigate to **Campaigns** page
+2. Find the campaign to edit
+3. Click **"Edit"** button
+4. Modify settings as needed
+5. Click **"Save Changes"**
+
+**Note**: Changes take effect immediately for active campaigns.
+
+### User Management
+
+#### Viewing Users
+
+1. Navigate to **Users** (Admin only)
+2. View user table with:
+   - User ID
+   - Email
+   - Registration date
+   - Total receipts
+   - Total rewards
+   - Status
+
+**Filtering:**
+- Filter by registration date
+- Search by email
+- Filter by activity status
+
+#### User Details
+
+1. Click on a user row
+2. View comprehensive user information:
+   - Profile details
+   - Receipt history
+   - Reward history
+   - Referral information
+   - Activity timeline
+
+#### Managing Users
+
+**Actions Available:**
+- View user profile
+- Review user receipts
+- See reward history
+- Check referral relationships
+- View activity logs
+
+### Reward Management
+
+#### Viewing Rewards
+
+1. Navigate to **Rewards** (Admin only)
+2. View reward statistics:
+   - Total rewards issued
+   - Reward distribution chart
+   - Top earners
+   - Reward trends over time
+
+#### Reward Details
+
+- **Individual Rewards**: View each reward transaction
+- **User Rewards**: See rewards per user
+- **Campaign Rewards**: Track campaign-based rewards
+- **Referral Bonuses**: Monitor referral rewards
+
+#### Reward Status
+
+- **Pending**: Awaiting approval
+- **Approved**: Reward issued
+- **Paid**: Withdrawal processed
+- **Failed**: Processing error
+
+### Referral Management
+
+#### Viewing Referrals
+
+1. Navigate to **Referrals** (Admin only)
+2. View referral relationships:
+   - Referrer information
+   - Referee information
+   - Status
+   - Commission earned
+   - Total referrals per user
+
+#### Referral Analytics
+
+- Total referral pairs
+- Active referrals
+- Commission totals
+- Top referrers
+- Referral conversion rates
+
+### Analytics Dashboard
+
+#### Accessing Analytics
+
+1. Navigate to **Analytics** (Admin only)
+2. View comprehensive platform metrics
+
+#### Analytics Sections
+
+**Overview Metrics:**
+- Total receipts
+- Approval rate
+- Average processing time
+- Total rewards issued
+
+**Charts and Visualizations:**
+- Receipt submission trends
+- Reward distribution
+- User growth
+- Campaign performance
+- Store category breakdown
+
+**Time Range Selection:**
+- Last 7 days
+- Last 30 days
+- Last 90 days
+- Custom date range
+
+**Export Options:**
+- Export data as CSV
+- Generate reports
+- Download charts
+
+### Settings
+
+#### Platform Settings
+
+1. Navigate to **Settings** (Admin only)
+2. Configure platform-wide settings:
+
+**Maintenance Mode:**
+- Enable/disable maintenance mode
+- Set maintenance message
+- Schedule maintenance windows
+
+**Admin Notifications:**
+- Email notifications
+- Review assignment alerts
+- System alerts
+
+**Invite Reviewers:**
+- Send reviewer invitations
+- Manage reviewer access
+- View pending invitations
+
+#### Reviewer Invitation Flow
+
+1. Navigate to **Settings**
+2. Scroll to **Reviewer Management**
+3. Click **"Invite Reviewer"**
+4. Enter reviewer email address
+5. Click **"Send Invitation"**
+6. Reviewer receives email with verification link
+7. Reviewer clicks link and sets password
+8. Reviewer can now access dashboard
+
+### Role-Based Access
+
+#### Admin Role
+
+**Full Access:**
+- All dashboard pages
+- User management
+- Campaign creation and management
+- Analytics and reports
+- Settings and configuration
+- Reviewer invitation
+
+#### Reviewer Role
+
+**Limited Access:**
+- Dashboard overview
+- Receipt review (assigned receipts)
+- View receipt details
+- Approve/reject receipts
+- Cannot access:
+  - User management
+  - Campaign management
+  - Analytics
+  - Settings
+
+## 🔐 Authentication & Security
+
+### Authentication Flow
+
+1. **Login**: Users authenticate with email/password via Supabase
+2. **Session Management**: JWT tokens stored in httpOnly cookies
+3. **Role Verification**: User role checked from `web_users` table
+4. **Route Protection**: Middleware validates sessions and roles
+
+### Reviewer Invite Flow
+
+1. **Admin sends invite** via Settings page
+2. **Email sent** with verification token
+3. **Reviewer clicks link** → redirects to `/reviewer-verify`
+4. **Token verified** and session established
+5. **Password setup** by reviewer
+6. **Access granted** to reviewer-only pages
+
+### Security Best Practices
+
+- Use strong passwords for admin accounts
+- Regularly review user access
+- Monitor login attempts
+- Keep Supabase credentials secure
+- Enable 2FA when available
+
+## 🛠️ Technology Stack
+
+- **Next.js 15** with App Router
+- **TypeScript** for type safety
+- **React 19** for UI
+- **Supabase** for backend and authentication
+- **Tailwind CSS** for styling
+- **Radix UI** for accessible components
+- **Recharts** for data visualization
+
+## 📁 Project Structure
 
 ```
 next-blockcart/
@@ -268,7 +492,7 @@ next-blockcart/
 │   │   ├── layout.tsx           # Dashboard layout
 │   │   └── page.tsx             # Main dashboard page
 │   ├── login/                   # Authentication page
-│   ├── reviewer-verify/         # Reviewer invite acceptance & password setup
+│   ├── reviewer-verify/         # Reviewer invite acceptance
 │   ├── globals.css              # Global styles
 │   └── layout.tsx               # Root layout
 ├── components/                  # Reusable components
@@ -285,44 +509,7 @@ next-blockcart/
 └── public/                      # Static assets
 ```
 
-## Authentication Setup
-
-The application uses Supabase for authentication with the following features:
-
-- **Email/password authentication**
-- **Email invite system** for reviewers
-- **Password reset flow** for invited users
-- **JWT token management**
-- **Protected routes via middleware**
-- **Role-based access control** (admin, reviewer)
-
-### Creating Admin Users
-
-1. **Via Supabase Dashboard:**
-
-   - Go to **Authentication > Users**
-   - Create users with email/password
-   - Add user roles in the `web_users` table
-
-2. **Via SQL:**
-   ```sql
-   INSERT INTO web_users (id, email, role, created_at)
-   VALUES (gen_random_uuid(), 'admin@example.com', 'admin', NOW());
-   ```
-
-## Database Integration
-
-The application expects the following Supabase tables to be set up:
-
-- **`web_users`**: Admin and reviewer accounts with roles
-- **`receipts`**: Receipt submissions with status tracking
-- **`campaigns`**: Reward campaigns with rules and dates
-- **`rewards`**: User rewards and point balances
-- **`referrals`**: Referral tracking and commission data
-
-See `../supabase-backend/database/schema.sql` for the complete schema.
-
-## Development Workflow
+## 🔍 Development Workflow
 
 1. **Start the development server** with `npm run dev`
 2. **Make changes** to your code - Next.js will hot-reload automatically
@@ -330,7 +517,7 @@ See `../supabase-backend/database/schema.sql` for the complete schema.
 4. **Test database operations** using the Supabase Dashboard
 5. **Debug** using browser dev tools or VS Code debugger
 
-## Deployment
+## 🚀 Deployment
 
 ### Vercel (Recommended)
 
@@ -352,7 +539,7 @@ npm run build
 # The .next folder will be created with optimized build
 ```
 
-## Common Issues and Solutions
+## 🐛 Troubleshooting
 
 ### Authentication Issues
 
@@ -389,16 +576,50 @@ npm run type-check
 npm run lint
 ```
 
-## API Routes
+### Reviewer Access Issues
 
-The application uses Next.js API routes for server-side operations:
+- Verify reviewer account exists in `web_users` table
+- Check role is set to "reviewer"
+- Ensure reviewer completed invitation flow
+- Verify token hasn't expired
 
-- **Authentication endpoints**
-- **Data fetching for dashboard**
-- **Admin operations**
+## 📊 Campaign Templates & Eligibility
 
-## Monitoring and Analytics
+### Template System
 
-- **Error monitoring**: Check browser console for client errors
-- **Performance**: Use Next.js built-in analytics
-- **Database**: Monitor through Supabase Dashboard
+The dashboard includes pre-built campaign templates that map to the `rule_json` schema:
+
+- **Double Rewards Weekend**: Toggles multiplier with minimum spend
+- **Grocery Basket Bonus**: Fixed bonus with store targeting
+- **Referral Boost**: Bonus for referral relationships
+
+### Eligibility Preview
+
+When creating campaigns:
+1. Configure campaign rules
+2. Use **eligibility preview** tool
+3. See how many users/receipts qualify
+4. Adjust rules based on preview
+5. Create campaign with confidence
+
+The preview uses:
+- `campaign_eligibility_snapshots` view
+- `preview_campaign_rule` RPC function
+
+## 🤝 Contributing
+
+When adding new features:
+
+1. Follow existing code patterns
+2. Use TypeScript for type safety
+3. Maintain role-based access control
+4. Test with both admin and reviewer roles
+5. Update documentation
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+**Need Help?** Check the main [README.md](../README.md) for project overview and additional resources.
